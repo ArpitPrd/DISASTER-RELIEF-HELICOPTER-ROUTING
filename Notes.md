@@ -69,6 +69,7 @@ H Helicopters
     - check the submission details
 
 - Desciprtion of the output
+```
     for each Helicopter h:
         print h.id len(h.trip) end="\n"
         for each trip t in h.trip:
@@ -81,8 +82,9 @@ H Helicopters
                     print p.freq
 
         print -1
-
+```
 - Evalutation of each cost
+```
     cost = 0
     // cost subtraction
     for each Helicopter h:
@@ -106,8 +108,9 @@ H Helicopters
         for each trip t in h.trip:
             for each village v in InOrder(h.trip.villages):
                 cost += eval_cost(v.packages)
-
+```
 - Verification
+```
     // distance 
     for each Helicopter h:
         h_trip_dist = 0
@@ -127,6 +130,7 @@ H Helicopters
                 for each package p in v.packages:
                     weight_total += p.weight * p.freq
             assert weight_total <= h.wcap
+```
 ## General Pointers
 
 
