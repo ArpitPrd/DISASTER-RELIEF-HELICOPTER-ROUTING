@@ -31,11 +31,13 @@ struct Village {
     int id;
     Point coords;
     int population;
+    int rem_population;  // added people remaining to be served
 };
 
 struct Helicopter {
     int id;
     int home_city_id;
+    Point home_city_coords;
     double weight_capacity;
     double distance_capacity;
     double fixed_cost; // F
@@ -53,6 +55,7 @@ struct ProblemData {
 };
 
 struct Drop {
+    Village v;
     int village_id;
     int dry_food;
     int perishable_food;

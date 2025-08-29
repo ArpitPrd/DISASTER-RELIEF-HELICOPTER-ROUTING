@@ -209,3 +209,7 @@ H Helicopters
     - Input Output formatting V
     - Hill climbing code A
     - Modelling Tomorrow
+
+## Ideas
+- For a fixed set of villages, package distribution and cost of trip can be defined as independent quantities and need to be maximized and minimized respectively.
+- Given a set of villages and a helicopter, first determine whether a trip is possible(distance should be less than dcap). Then 
