@@ -102,6 +102,7 @@ H Helicopters
     // contains the check if more than 9 are considered, the consider the best ones
 
     TODO
+    can check just the number of excesses, others just check p.v for perisible if not exceed then (this will bring us an intial working code)
 
     // cost addition
     for each Helicopter h:
@@ -120,7 +121,7 @@ H Helicopters
                 dist_total += dist(v.c, prev_c)
                 h_trip_dist += dist(v.c, prev_c)
             assert dist_total <= h.dcap
-        assert dist_total <= DMax
+        assert h_trip_dist <= DMax
         
     // weight
     for each Helicopter h:
@@ -131,10 +132,25 @@ H Helicopters
                     weight_total += p.weight * p.freq
             assert weight_total <= h.wcap
 ```
-## General Pointers
 
+## Algorithms to test
+
+- Heuristic Search: Quality may be good, but very slow
+- Branch and Bound: 
+    - state space
+    - Transition function
+    - eval a heuritci fucntion 
+    - Depth First Branch and Bound
+    - Not scalable
+- Local Search (reco)
+    - quality of search as a function of time
 
 ## Submission
+
+- VMs
+    - amd64
+    - g++ 9.4.0
+    - RAM 8GB
 
 - check the input is valid or not
     1
@@ -144,13 +160,48 @@ H Helicopters
     2 0 5 1000 0 10 1000
     2 1 100 25 10 1 2 100 50 10 1
 
+- submission:
+    - zipping:
+        - Name: 2022EE11837_2022EE111XX.zip
+        - unzipping should produce:
+            - (in working dir)
+            - .cpp/ .h files
+            - Makefile
+            - writeup.txt
+    - make produces the executable "main"
+    - ./main input.txt output.txt
+
+    -writeup.txt
+        - Line 1: Even though I/we have taken help from the following
+        students and LLMs in terms of discussing ideas and coding practices, all my/our code is written by
+        me/us
+        - Students:
+        - LLMs
+        - Something about the code
+
+- 12hr log instructions
+
+- critteria of judgment: objective function, how well it performs
 
 ## Search Probelm Formualtion
 
 - Modelling
-    - In context of local search defune the neighbours
+    - A state here would include:
+        - Helicopters: their trips and order of village travels
 
 - Algortithm
+
+## General Pointer
+
+- c++: cannot define recursilvely in same class
+- std::next(n, it), gives an iterator n steps forwards'
+- bool operator==(const template& var) {}
+- can define this inside a struct also
+- pass function as an arg as int (*func)(int, int)
+
+## Coding Enhancements
+
+- >= operation not in class, because it requires the obj function, not truly a class property
 
 ## Plans
 
