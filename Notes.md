@@ -198,6 +198,23 @@ H Helicopters
 - bool operator==(const template& var) {}
 - can define this inside a struct also
 - pass function as an arg as int (*func)(int, int)
+- you can define stringstream for continuous inputs
+- usage of chrono for time
+    ```
+    #include <chrono>
+
+    using namespaces std::chrono;
+    int main() {
+        time_point<std::chrono::high_resolution_clock>
+ start = high_resolution_clock::now();
+        ...
+        auto stop = high_resolution_clock::now();
+
+        auto duration = duration_cast<seconds>(stop-start);
+
+        for comparsion duration.count();
+    }
+    ```
 
 ## Coding Enhancements
 
@@ -212,4 +229,20 @@ H Helicopters
 
 ## Ideas
 - For a fixed set of villages, package distribution and cost of trip can be defined as independent quantities and need to be maximized and minimized respectively.
-- Given a set of villages and a helicopter, first determine whether a trip is possible(distance should be less than dcap). Then 
+- Given a set of villages and a helicopter, first determine whether a trip is possible(distance should be less than dcap). 
+
+## Structures defined
+
+- ProblemData, defines every thing in the input
+```
+struct ProblemData {
+    double time_limit_minutes;
+    double d_max;
+    vector<PackageInfo> packages;
+    vector<Point> cities;
+    vector<Village> villages;
+    vector<Helicopter> helicopters;
+};
+```
+- 
+- Solution is a vector of Helicopters

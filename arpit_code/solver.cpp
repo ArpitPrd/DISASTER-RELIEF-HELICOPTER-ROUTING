@@ -1,9 +1,16 @@
 #include "solver.h"
 #include <iostream>
 #include <chrono>
+#include <map>
 
 using namespace std;
+using namespace std::chrono;
+using hrc = time_point<high_resolution_clock>;
+#define now() high_resolution_clock::now()
 // You can add any helper functions or classes you need here.
+
+map<int, Helicopter*> hmap;
+map<int, Village*> vmap;
 
 /**
  * @brief calculates the distance in a trip
@@ -29,7 +36,8 @@ float trip_cost(Trip t, Helicopter h) {
 /**
  * @brief use this for calculation of scores for one trip
  */
-float all_trip_cost(Helicopter h) {
+float all_trip_cost(HelicopterPlan hp) {
+    Helicopter h = *hmap[hp.helicopter_id];
     float sum_across_trips = 0;
     for (Trip trip : h.trips) {
         sum_across_trips += trip_cost(trip, h);
@@ -37,25 +45,55 @@ float all_trip_cost(Helicopter h) {
     return sum_across_trips;
 }
 
+float plan_cost(vector<HelicopterPlan> hps) {
+    float cost = 0;
+    for (auto hp: hps) {
+        cost += all_trip_cost(hp);
+    }
+}
+
 /**
- * @brief general purpose termination criteria
+ * @brief general purpose Timer contains term criteria, restart criteria
+ * 
+ * @param start_ts abs start time
+ * @param end_time relative ending time
+ * @param last_restart_time abs last restart time
+ * @param eps_restart rel time lapse after which timer indicates the solver for a restart
  */
-class SW {
+class Timer {
 public:
+    hrc start_ts;
     int end_time;
-    int ts;
-    SW(int end_time) {
+    hrc last_restart_ts;
+    int eps_restart;
+    Timer(int end_time, int eps_restart) {
         this->end_time = end_time;
-        ts = 0;
+        this->eps_restart = eps_restart;
+    }
+    void start() {
+        start_ts = now();
     }
     bool check_term() {
-        return false; // TODO
+        hrc ts = now();
+        auto duration = duration_cast<seconds>(ts-start_ts);
+        if (duration.count() > end_time + 1) {
+            return true;
+        }
+        return false; 
     }
     float get_time() {
-        return 0.0;
+        hrc ts = now();
+        auto duration = duration_cast<seconds>(ts-start_ts);
+        return duration.count();
     }
     bool restart() {
-        return true;
+        hrc ts = now();
+        auto duration = duration_cast<seconds>(ts-last_restart_ts);
+        last_restart_ts = ts;
+        if (duration.count() > eps_restart) {
+            return true;
+        }
+        return false;
     }
 };
 
@@ -63,20 +101,41 @@ public:
  * @brief Defines the search problem space
  * 
  * @param b_states best states
- * @def add_to_lm: add this ""state"" to local maxima
+ * @param data contains the information how each state is going to look like, this has been put in the Space because it contains information about how states are ging to look like and the sampler needs to know this
+ * @def add_to_lm: add this "state" to local maxima
+ * @def add_to_p: add this "state" to potential searches, can remove this later
+ * 
+ * @remark sampler is put here since you "sample" from a "space"
  */
 class HCSpace {
 public:
     vector<HCState> b_states;
-    vector<HCState> p_states;
+    
+    ProblemData data;
+    bool red;
+    
+    HCSpace(ProblemData _data, bool _red) {
+        data = _data;
+        red = _red;
+    }
+
     HCState sample() {
         ;
     }
+
     void add_to_lm(HCState state) {
         b_states.push_back(state);
     }
-    void add_to_p(HCState state) {
-        p_states.push_back(state);
+
+    HCState estimated_global_extrema() {
+        HCState global_state;
+        float obj_global = std::numeric_limits<float>::lowest();
+        for (auto state : b_states) {
+            if (cmp_states(state, global_state, eval_state, red)) {
+                global_state = state;
+            }
+        }
+        return global_state;
     }
 };
 
@@ -87,18 +146,18 @@ public:
  */
 class HCState {
 public:
-    vector<Helicopter> h;
+    vector<HelicopterPlan> h;
 
     HCState() {
         ;
     }
-    HCState(vector<Helicopter> h) {
+    HCState(vector<HelicopterPlan> h) {
         this->h = h;
     }
 
     vector<HCState> get_successors() {
         vector<HCState> successors;
-        for(Helicopter heli : this->h){
+        for(HelicopterPlan heli : this->h){
             for(Trip t : heli.trips){
                 int length = t.drops.size();
                 for(int i = 0; i < length; i++){
@@ -112,23 +171,31 @@ public:
         return successors; 
     }
 
-    bool operator==(const HCState state) {
-        ;
-    }
-
 };
 
 /**
  * @brief compares two states and returns true if state1 >= state2
  */
-bool cmp_states(HCState state1, HCState state2, float (*func) (HCState), bool red=true) {
-    ;
+bool cmp_states(HCState state1, HCState state2, float (*func) (HCState), bool red=false) {
+    if (!red) {
+        if (eval_state(state1) >= eval_state(state2)) {
+            return true;
+        }
+        return false;
+    }
+    else {
+        if (eval_state(state1) <= eval_state(state2)) {
+            return true;
+        }
+        return false;
+    }
+    return false;
 }
 
 /**
  * @brief gets the next succesor (best)
  */
-HCState get_best_successor(HCState state, bool red=true) {
+HCState get_best_successor(HCState state, bool red=false) {
     auto successors = state.get_successors();
     float best_obj_value = std::numeric_limits<float>::min();
     HCState best_state = state;
@@ -145,9 +212,11 @@ HCState get_best_successor(HCState state, bool red=true) {
 
 /**
  * @brief produces the objective function for the given state s
+ * 
+ * @param hcs hill climbing state
  */
-float eval_state(HCState h) {
-    return 0.0;
+float eval_state(HCState hcs) {
+    return plan_cost(hcs.h);
 }
 /**
  * @brief general code for hill climbing with random restarts
@@ -155,30 +224,29 @@ float eval_state(HCState h) {
  * @param cstate current state
  * @param bs_state best succsor state
  * @param space search space
- * @param wc termination condition
+ * @param timer termination condition
+ * 
+ * @remark this restarts under two condition 1. restart eps 2. local extrema
  */
-void hcrr(SW wc, HCState cstate, HCSpace space, bool red=true) {
-    if (wc.check_term()) {
-        float obj_fn = std::numeric_limits<float>::min();  // todo: have to change
+void hcrr(Timer timer, HCState cstate, HCSpace space, bool red=false) {
+    if (timer.check_term()) {
+        float obj_fn = std::numeric_limits<float>::lowest();  // todo: have to change
         
         HCState bs_state = get_best_successor(cstate);
 
         // moving to a new search (found a local maxima)
         if (!cmp_states(bs_state, cstate, eval_state, red)) {
             space.add_to_lm(cstate);
-            hcrr(wc, space.sample(), space);
+            hcrr(timer, space.sample(), space);
         }
 
-        else if (wc.restart()) {
-            space.add_to_p(cstate);
-            hcrr(wc, space.sample(), space);
+        else if (timer.restart()) {
+            hcrr(timer, space.sample(), space);
         }
 
         else{
-            hcrr(wc, bs_state,space, red);
+            hcrr(timer, bs_state,space, red);
         }
-
-        
     }
     return;
 }
@@ -199,28 +267,26 @@ Solution solve(const ProblemData& problem) {
     // This is a naive example: send each helicopter on one trip to the first village.
     // This will definitely violate constraints but shows the structure.
     
-    for (const auto& helicopter : problem.helicopters) {
+    // timer definition
+    float eps_restart = 60;
+    Timer timer(problem.time_limit_minutes * 60, eps_restart);
+
+    // maximization problem 
+    bool red = false;
+
+    // Seach Space
+    HCSpace hcspace(problem, red);
+
+    // Initial Node
+    HCState cstate = hcspace.sample();
+
+    // start hill climbing with random restarts
+    hcrr(timer, cstate, hcspace, red);
+
+    HCState best_sol = hcspace.estimated_global_extrema();
+
+    for (const auto& helicopter : best_sol.h) {
         HelicopterPlan plan;
-        plan.helicopter_id = helicopter.id;
-
-        if (!problem.villages.empty()) {
-            Trip trip;
-            // Pickup 1 of each package type
-            trip.dry_food_pickup = 1;
-            trip.perishable_food_pickup = 1;
-            trip.other_supplies_pickup = 1;
-
-            // Drop them at the first village
-            Drop drop;
-            drop.v = problem.villages[0];
-            drop.village_id = problem.villages[0].id;
-            drop.dry_food = 1;
-            drop.perishable_food = 1;
-            drop.other_supplies = 1;
-
-            trip.drops.push_back(drop);
-            plan.trips.push_back(trip);
-        }
         solution.push_back(plan);
     }
     
