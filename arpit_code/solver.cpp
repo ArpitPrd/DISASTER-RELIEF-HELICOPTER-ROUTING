@@ -369,6 +369,22 @@ public:
     }
 
     vector<HCState> get_successors() { // TODO
+        /*
+
+        For God Verma to implement
+
+            psuedo code to write successor function
+
+            for helicopterplan in HPs:
+                for trip in helicopterplan.trips:
+                    add one more village to the trip (if possible)
+                    remove one village from the trip (if possible)
+                    swap two villages in the trip (if possible)
+                    modify the packages assigned to the trip (if possible)
+                    create a new state with this modified helicopterplan
+                    add this new state to the list of successors
+                
+        */
         vector<HCState> successors;
         for(HelicopterPlan heli : this->h){
             for(Trip t : heli.trips){
