@@ -183,6 +183,14 @@ H Helicopters
 
 - critteria of judgment: objective function, how well it performs
 
+- Number of helicopters: up to 40
+
+- Number of cities: up to 25
+
+- Number of villages: up to 1200
+
+- Permissible time: approximately 5 minutes of processing time for this instance
+
 ## Search Probelm Formualtion
 
 - Modelling

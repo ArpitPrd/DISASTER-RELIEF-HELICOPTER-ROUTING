@@ -66,6 +66,7 @@ struct Trip {
     int dry_food_pickup;
     int perishable_food_pickup;
     int other_supplies_pickup;
+    double trip_distance; // total distance of the trip
     vector<Drop> drops;
 };
 
