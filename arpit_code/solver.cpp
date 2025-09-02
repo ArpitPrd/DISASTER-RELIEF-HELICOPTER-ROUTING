@@ -228,6 +228,7 @@ vector<Trip> selectTripsWithinLimit(const vector<Trip>& trips, double Dmax) {
 Trip assignPackages(Trip t, int wcap, vector<PackageInfo>& pack) {
     int numVillages = (int)t.drops.size();
     int totalAssigned = 0;
+    t.total_value = 0;
 
     // priority order: perishable (1), dry (0), other (2)
     vector<int> order = {1, 0, 2};
@@ -248,6 +249,7 @@ Trip assignPackages(Trip t, int wcap, vector<PackageInfo>& pack) {
             if (pkgType == 1) d.perishable_food = X;
             if (pkgType == 2) d.other_supplies = X;
             assignedThisType += X * pack[pkgType].weight;
+            t.total_value += X * pack[pkgType].value;
         }
 
         // Adjust if overshoot
@@ -257,14 +259,17 @@ Trip assignPackages(Trip t, int wcap, vector<PackageInfo>& pack) {
                 if (pkgType == 0 && d.dry_food > 0) {
                     d.dry_food -= 1;
                     assignedThisType -= pack[pkgType].weight;
+                    t.total_value -= pack[pkgType].value;
                 }
                 if (pkgType == 1 && d.perishable_food > 0) {
                     d.perishable_food -= 1;
                     assignedThisType -= pack[pkgType].weight;
+                    t.total_value -= pack[pkgType].value;
                 }
                 if (pkgType == 2 && d.other_supplies > 0) {
                     d.other_supplies -= 1;
                     assignedThisType -= pack[pkgType].weight;
+                    t.total_value -= pack[pkgType].value;
                 }
             }
         }
@@ -360,7 +365,7 @@ public:
 class HCState {
 public:
     vector<HelicopterPlan> h;
-
+    ProblemData data;
     HCState() {
         ;
     }
@@ -377,22 +382,53 @@ public:
 
             for helicopterplan in HPs:
                 for trip in helicopterplan.trips:
-                    add one more village to the trip (if possible)
-                    remove one village from the trip (if possible)
-                    swap two villages in the trip (if possible)
-                    modify the packages assigned to the trip (if possible)
-                    create a new state with this modified helicopterplan
-                    add this new state to the list of successors
+                    add one more village to the trip (if possible) -> done
+                    remove one village from the trip (if possible) -> done
+                    swap two villages in the trip (if possible) !PENDING
+                    modify the packages assigned to the trip (if possible) !PENDING
+                    create a new state with this modified helicopterplan -> done
+                    add this new state to the list of successors -> done
                 
         */
         vector<HCState> successors;
         for(HelicopterPlan heli : this->h){
+            float total = all_trip_cost(heli);
             for(Trip t : heli.trips){
+                Trip temp = t;
                 int length = t.drops.size();
+                float d = distance(t.drops[length - 1].v.coords, hmap[heli.helicopter_id]->home_city_coords);
+                float cur_trip_cost = trip_cost(t, *hmap[heli.helicopter_id]);
+                for(int i = 0; i < data.villages.size(); i++){
+                    if(data.villages[i].id == t.drops[length-1].village_id){
+                        continue;
+                    }
+                    float d1 = distance(data.villages[i].coords, t.drops[length - 1].v.coords);
+                    float d2 = distance(data.villages[i].coords, hmap[heli.helicopter_id]->home_city_coords);
+                    if (((t.trip_distance - d + d1 + d2) <= hmap[heli.helicopter_id]->distance_capacity) &&
+                        (total - d + d1 + d2) <= data.d_max)
+                    {
+                        
+                        Drop new_village;
+                        new_village.v = data.villages[i];
+                        new_village.village_id = data.villages[i].id;
+                        t.drops.push_back(new_village);
+                        t = assignPackages(t, hmap[heli.helicopter_id]->weight_capacity, data.packages);
+                        successors.push_back(*this);
+                        t = temp;
+                    }
+                }
+
+
                 for(int i = 0; i < length; i++){
                     for(int j = i+1; j < length; j++){
                         swap(t.drops[i], t.drops[j]);
-                        successors.push_back(*this);
+                        float new_trip_cost = trip_cost(t, *hmap[heli.helicopter_id]);
+                        if (new_trip_cost <= hmap[heli.helicopter_id]->distance_capacity &&
+                            total - cur_trip_cost + new_trip_cost <= data.d_max){
+                            successors.push_back(*this);
+                        }
+                        swap(t.drops[i], t.drops[j]);
+                            
                     }
                 }
             }
