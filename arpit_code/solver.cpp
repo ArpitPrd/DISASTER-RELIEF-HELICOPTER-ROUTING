@@ -34,6 +34,7 @@ float trip_cost(Trip t, Helicopter h) {
     return cost;
 }
 
+
 /**
  * @brief use this for calculation of scores for one trip
  */
@@ -46,11 +47,28 @@ float all_trip_cost(HelicopterPlan hp) {
     return sum_across_trips;
 }
 
+float all_trip_value(HelicopterPlan hp){
+    Helicopter h = *hmap[hp.helicopter_id];
+    float value_across_trips = 0;
+    for(Trip trip : h.trips){
+        value_across_trips += trip.total_value;
+    }
+    return value_across_trips;
+}
+
 float plan_cost(vector<HelicopterPlan> hps) {
     float cost = 0;
     for (auto hp: hps) {
         cost += all_trip_cost(hp);
     }
+}
+
+float plan_value(vector<HelicopterPlan> hps){
+    float value = 0;
+    for(HelicopterPlan hp : hps){
+        value += all_trip_value(hp);
+    }
+    return value;
 }
 
 /**
@@ -361,11 +379,13 @@ public:
 
 /**
  * @brief to any node, you have to define the state space and the succesor function on your own
+ * @note TODO : add a map for each helicopter for each trip maintaining cities travelled in the trip
  */
 class HCState {
 public:
     vector<HelicopterPlan> h;
     ProblemData data;
+    
     HCState() {
         ;
     }
@@ -417,7 +437,7 @@ public:
                         t = temp;
                     }
                 }
-
+                
 
                 for(int i = 0; i < length; i++){
                     for(int j = i+1; j < length; j++){
@@ -481,7 +501,7 @@ HCState get_best_successor(HCState state, bool red=false) {
  * @param hcs hill climbing state
  */
 float eval_state(HCState hcs) {
-    return plan_cost(hcs.h);
+    return plan_value(hcs.h) - plan_cost(hcs.h);
 }
 /**
  * @brief general code for hill climbing with random restarts
