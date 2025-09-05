@@ -447,6 +447,10 @@ bool is_valid_plan(const HelicopterPlan& hp, const ProblemData& data) {
     return true;
 }
 
+vector<Trip> try_adding_village(Trip t) {
+    // TODO add helicopter plans etc here along with 
+}
+
 /**
  * @brief to any node, you have to define the state space and the succesor function on your own
  * 
@@ -466,14 +470,22 @@ public:
         for(HelicopterPlan heli : h){
             for(Trip t : heli.trips){
                 for(Drop d : t.drops){
-                    if (t.vis_villages.find(d.village_id) == t.vis_villages.end()){
-                        cerr << "Village ID " << d.village_id << " not found in vis_villages!::HCState" << endl;
-                        // exit(1);
-                    }
-                    cout << "This may be the error" << endl;
                     t.vis_villages[d.village_id] = true;
-                    cout << "This is not the error" << endl;
                 }
+            }
+        }
+    }
+
+    vector<HCState> get_successor() {
+
+        for (size_t h_idx = 0; h_idx < this->hplans.size(); h_idx++) {
+            vector<Trip> all_trips = this->hplans[h_idx].trips;
+            for (size_t t_idx = 0; t_idx <  all_trips.size(); t_idx++) {
+                // we either add a village or remove a village
+                Trip expand_this_trip = all_trips[t_idx];
+                // addding a village
+
+                vector<Trip> meta_villages = try_adding_village(expand_this_trip);
             }
         }
     }
@@ -695,7 +707,7 @@ HCState get_best_successor(HCState state, bool red = false) {
     if (cmp_states(best_state, state, eval_state, red)) {
         return best_state;
     }
-    
+    cout << "No better successor found, return original state" << endl;
     return state; // No better successor found, return original state
 }
 
@@ -721,7 +733,11 @@ void hcrr(Timer& timer, HCState cstate, HCSpace& space, bool red = false) {
         if (!cmp_states(bs_state, cstate, eval_state, red)) {
             space.add_to_lm(cstate); // Add the local maximum to the best states
             cstate = space.sample(); // Random restart
+            // cout << "no imp" << endl;
         }
+        // if (cmp_states(bs_state, cstate, eval_state, red) && cmp_states(cstate, bs_state, eval_state, red)) {
+        //     cout << "same" << endl;
+        // }
         
         // Check if it's time for a random restart based on interval
         else if (timer.restart()) {
@@ -730,9 +746,9 @@ void hcrr(Timer& timer, HCState cstate, HCSpace& space, bool red = false) {
         
         // Otherwise, move to the best successor
         else {
-            // cout << "[hcrr] I am Climbing the hill for the " << cnt << "th time" << endl;
             cnt += 1;
             cstate = bs_state; // Climb the hill
+            // cout << eval_state(cstate) << endl;
         }
     }
 
