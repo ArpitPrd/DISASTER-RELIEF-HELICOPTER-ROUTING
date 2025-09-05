@@ -254,3 +254,9 @@ struct ProblemData {
 ```
 - 
 - Solution is a vector of Helicopters
+
+
+## Check List
+
+- Channged everything to double
+- ID -> Index -> Object::Implementations

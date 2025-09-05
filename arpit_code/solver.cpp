@@ -19,21 +19,28 @@ map<int, Village*> vmap;
 /**
  * @brief calculates the distance in a trip
  */
-float trip_distance_travelled(Trip t, Helicopter h) {
-    float dist = 0;
+double trip_distance_travelled(Trip t, Helicopter h) {
+    double dist = 0;
     Point prev_coords = h.home_city_coords;
     for (Drop d: t.drops) {
         dist += distance(prev_coords, d.v.coords);
+        prev_coords = d.v.coords;
     }
+    dist += distance(prev_coords, h.home_city_coords);
     return dist;
 }
 
 /**
  * @brief use thus for per trip cost
  */
-float trip_cost(Trip t, Helicopter h) {
-    float dist = trip_distance_travelled(t, h);
-    float cost = h.fixed_cost + h.alpha*dist;
+double trip_cost(Trip t, int h_id) {
+    if (hmap.find(h_id) == hmap.end()) {
+        cerr << "Helicopter ID " << h_id << " not found in hmap!::trip_cost" << endl;
+        return 0; // or handle the error as appropriate
+    }
+    Helicopter h = *hmap[h_id];
+    double dist = trip_distance_travelled(t, h);
+    double cost = h.fixed_cost + h.alpha*dist;
     return cost;
 }
 
@@ -41,36 +48,42 @@ float trip_cost(Trip t, Helicopter h) {
 /**
  * @brief use this for calculation of scores for one trip
  */
-float all_trip_cost(HelicopterPlan hp) {
-    Helicopter h = *hmap[hp.helicopter_id];
-    float sum_across_trips = 0;
-    for (Trip trip : h.trips) {
-        sum_across_trips += trip_cost(trip, h);
+double all_trip_cost(HelicopterPlan hplan) {
+    if (hmap.find(hplan.helicopter_id) == hmap.end()) {
+        cerr << "Helicopter ID " << hplan.helicopter_id << " not found in hmap!::all_trip_cost" << endl;
+        return 0; // or handle the error as appropriate
+    }
+    double sum_across_trips = 0;
+    for (Trip trip : hplan.trips) {
+        sum_across_trips += trip_cost(trip, hplan.helicopter_id);
     }
     return sum_across_trips;
 }
 
-float all_trip_value(HelicopterPlan hp){
-    Helicopter h = *hmap[hp.helicopter_id];
-    float value_across_trips = 0;
-    for(Trip trip : h.trips){
+double all_trip_value(HelicopterPlan hplan){
+    if (hmap.find(hplan.helicopter_id) == hmap.end()) {
+        cerr << "Helicopter ID " << hplan.helicopter_id << " not found in hmap!::all_trip_value" << endl;
+        return 0; // or handle the error as appropriate
+    }
+    double value_across_trips = 0;
+    for(Trip trip : hplan.trips){
         value_across_trips += trip.total_value;
     }
     return value_across_trips;
 }
 
-float plan_cost(vector<HelicopterPlan> hps) {
-    float cost = 0;
-    for (auto hp: hps) {
-        cost += all_trip_cost(hp);
+double plan_cost(vector<HelicopterPlan> hps) {
+    double cost = 0;
+    for (auto hplan: hps) {
+        cost += all_trip_cost(hplan);
     }
     return cost;
 }
 
-float plan_value(vector<HelicopterPlan> hps){
-    float value = 0;
-    for(HelicopterPlan hp : hps){
-        value += all_trip_value(hp);
+double plan_value(vector<HelicopterPlan> hplans){
+    double value = 0;
+    for(HelicopterPlan hplan : hplans){
+        value += all_trip_value(hplan);
     }
     return value;
 }
@@ -87,33 +100,34 @@ float plan_value(vector<HelicopterPlan> hps){
 class Timer {
 public:
     hrc start_ts;
-    int end_time;
+    double end_time;
     hrc last_restart_ts;
-    int eps_restart;
+    double eps_restart;
     Timer(int end_time, int eps_restart) {
         this->end_time = end_time;
         this->eps_restart = eps_restart;
     }
     void start() {
         start_ts = now();
+        last_restart_ts = start_ts;
     }
     bool check_term() {
         hrc ts = now();
         auto duration = duration_cast<seconds>(ts-start_ts);
-        if (duration.count() > end_time + 1) {
+        if (duration.count() >= end_time) {
             return true;
         }
         return false; 
     }
-    float get_time() {
+    double get_time() {
         hrc ts = now();
         auto duration = duration_cast<seconds>(ts-start_ts);
         return duration.count();
     }
     bool restart() {
         hrc ts = now();
-        auto duration = duration_cast<seconds>(ts-last_restart_ts);
         last_restart_ts = ts;
+        auto duration = duration_cast<seconds>(ts-last_restart_ts);
         if (duration.count() > eps_restart) {
             return true;
         }
@@ -125,7 +139,7 @@ public:
  * @brief get all villages within distance dcap from center village
  * 
  * @param villages list of all villages
- * @param center village from which we want to find other villages within distance dcap
+ * @param p village from which we want to find other villages within distance dcap
  * @param dcap distance capacity
  * @return std::vector<Village> list of villages within distance dcap from center village
  */
@@ -159,54 +173,63 @@ std::vector<Trip> planAllPaths(
 
     // Single-village paths
     for (const auto& v : villages) {
-        double totalDist = distance(p, v.coords) + distance(v.coords, p);
+        double totalDist = distance(p, v.coords) * 2;
         if (totalDist <= d) {
+            // Initialize drop
             Drop drop;
             drop.village_id = v.id;
             drop.v = v;
             drop.dry_food = 0;
             drop.perishable_food = 0;
             drop.other_supplies = 0;
+            
+            // Initialize trip
             Trip trip;
             trip.dry_food_pickup = 0;
             trip.perishable_food_pickup = 0;
             trip.other_supplies_pickup = 0;
             trip.drops.push_back(drop);
             trip.trip_distance = totalDist;
+
+            // Add to all paths
             allPaths.push_back(trip);
         }
     }
 
-    // Two-village paths
-    for (size_t i = 0; i < villages.size(); i++) {
-        for (size_t j = i + 1; j < villages.size(); j++) {
-            double totalDist = distance(p, villages[i].coords)
-                             + distance(villages[i].coords, villages[j].coords)
-                             + distance(villages[j].coords, p);
-            if (totalDist <= d) {
-                Drop drop1;
-                drop1.village_id = villages[i].id;
-                drop1.v = villages[i];
-                drop1.dry_food = 0;
-                drop1.perishable_food = 0;
-                drop1.other_supplies = 0;   
-                Drop drop2;
-                drop2.village_id = villages[j].id;
-                drop2.v = villages[j];
-                drop2.dry_food = 0;
-                drop2.perishable_food = 0;
-                drop2.other_supplies = 0;
-                Trip trip;
-                trip.dry_food_pickup = 0;
-                trip.perishable_food_pickup = 0;
-                trip.other_supplies_pickup = 0;
-                trip.drops.push_back(drop1);
-                trip.drops.push_back(drop2);
-                trip.trip_distance = totalDist;
-                allPaths.push_back(trip);
-            }
-        }
-    }
+    /*
+        Currently removed two-village, since we can construct all from 1 path village
+    */
+
+    // // Two-village paths
+    // for (size_t i = 0; i < villages.size(); i++) {
+    //     for (size_t j = i + 1; j < villages.size(); j++) {
+    //         double totalDist = distance(p, villages[i].coords)
+    //                          + distance(villages[i].coords, villages[j].coords)
+    //                          + distance(villages[j].coords, p);
+    //         if (totalDist <= d) {
+    //             Drop drop1;
+    //             drop1.village_id = villages[i].id;
+    //             drop1.v = villages[i];
+    //             drop1.dry_food = 0;
+    //             drop1.perishable_food = 0;
+    //             drop1.other_supplies = 0;   
+    //             Drop drop2;
+    //             drop2.village_id = villages[j].id;
+    //             drop2.v = villages[j];
+    //             drop2.dry_food = 0;
+    //             drop2.perishable_food = 0;
+    //             drop2.other_supplies = 0;
+    //             Trip trip;
+    //             trip.dry_food_pickup = 0;
+    //             trip.perishable_food_pickup = 0;
+    //             trip.other_supplies_pickup = 0;
+    //             trip.drops.push_back(drop1);
+    //             trip.drops.push_back(drop2);
+    //             trip.trip_distance = totalDist;
+    //             allPaths.push_back(trip);
+    //         }
+    //     }
+    // }
 
     // Sort by total distance
     std::sort(allPaths.begin(), allPaths.end(),
@@ -247,7 +270,7 @@ vector<Trip> selectTripsWithinLimit(const vector<Trip>& trips, double Dmax) {
  * @param pack list of package types with their weights and values
  * @return Trip updated trip with assigned packages
  */
-Trip assignPackages(Trip t, int wcap, vector<PackageInfo>& pack) {
+Trip assignPackages(Trip& t, int wcap, vector<PackageInfo>& pack) {
     int numVillages = (int)t.drops.size();
     int totalAssigned = 0;
     t.total_value = 0;
@@ -260,6 +283,10 @@ Trip assignPackages(Trip t, int wcap, vector<PackageInfo>& pack) {
         if (remainingCap <= 0) break;
 
         // find maximum integer X satisfying constraint
+        if (pack.size() <= (size_t) pkgType) {
+            cerr << "Package type " << pkgType << " not found in pack!::assignPackages" << endl;
+            exit(1);
+        }
         int X = remainingCap / (numVillages * pack[pkgType].weight);
         if (X <= 0) continue;
 
@@ -297,7 +324,7 @@ Trip assignPackages(Trip t, int wcap, vector<PackageInfo>& pack) {
                 }
                 else
                 {
-                    d.perishable_food += X;
+                    d.other_supplies += X;
                 }
                 N = d.other_supplies;
                 d.v.rem_population_other -= N;
@@ -307,7 +334,15 @@ Trip assignPackages(Trip t, int wcap, vector<PackageInfo>& pack) {
         }
 
         // Adjust if overshoot
-        while (assignedThisType > remainingCap) {
+        bool zero_weight = false;
+        for (int t =0; t<3; t++){
+            if (pack[t].weight <= 0) {
+                cerr << "Package weight for type " << t << " is non-positive!::assignPackages" << endl;
+                zero_weight = true;
+            }
+        }
+        
+        while (assignedThisType > remainingCap && !zero_weight) {
             for (auto& d : t.drops) {
                 if (assignedThisType <= remainingCap) break;
                 if (pkgType == 0 && d.dry_food > 0) {
@@ -344,8 +379,76 @@ Trip assignPackages(Trip t, int wcap, vector<PackageInfo>& pack) {
     return t;
 }
 
+bool is_village_visited_by_plan(const HelicopterPlan& hp, int village_id) {
+    for (const auto& trip : hp.trips) {
+        for (const auto& drop : trip.drops) {
+            if (drop.village_id == village_id) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool can_add_village_to_trip(const Trip& current_trip, const Village& new_village, const Helicopter& h) {
+    // Calculate the distance to the new village and back home.
+    Point last_village_coords = current_trip.drops.empty() ?
+                                h.home_city_coords :
+                                current_trip.drops.back().v.coords;
+    
+    double new_trip_dist = current_trip.trip_distance - distance(last_village_coords, h.home_city_coords) +
+                           distance(last_village_coords, new_village.coords) +
+                           distance(new_village.coords, h.home_city_coords);
+
+    if (new_trip_dist > h.distance_capacity) {
+        return false;
+    }
+
+    return true; // The total Dmax check would be done in the main successor function
+}
+
+
+void add_village_to_trip(Trip& trip, const Village& new_village) {
+    Drop new_drop;
+    new_drop.village_id = new_village.id;
+    new_drop.v = new_village;
+
+    // The trip's distance will be recalculated later by `assign_packages_to_trip`, so we just add the drop.
+    trip.drops.push_back(new_drop);
+}
+
+void remove_village_from_trip(Trip& trip, size_t index) {
+    if (index < trip.drops.size()) {
+        trip.drops.erase(trip.drops.begin() + index);
+    }
+}
+
+void swap_villages_in_trip(Trip& trip, size_t index1, size_t index2) {
+    if (index1 < trip.drops.size() && index2 < trip.drops.size()) {
+        std::swap(trip.drops[index1], trip.drops[index2]);
+    }
+}
+
+bool is_valid_plan(const HelicopterPlan& hp, const ProblemData& data) {
+    // Check if the helicopter plan's total distance exceeds DMax
+    double total_distance = all_trip_cost(hp);
+    
+    // Assumes `data` contains a way to find the Dmax for the helicopter.
+    // This part of the logic needs to be integrated with the ProblemData structure.
+    
+    // Example:
+    double dmax = data.d_max; // Or maybe data.helicopters[hp.helicopter_id].Dmax
+    if (total_distance > dmax) {
+       return false;
+    }
+
+    return true;
+}
+
 /**
  * @brief to any node, you have to define the state space and the succesor function on your own
+ * 
+ * @param data problem data originally fed in
  * @note TODO : add a map for each helicopter for each trip maintaining cities travelled in the trip
  */
 class HCState {
@@ -361,7 +464,13 @@ public:
         for(HelicopterPlan heli : h){
             for(Trip t : heli.trips){
                 for(Drop d : t.drops){
+                    if (t.vis_villages.find(d.village_id) == t.vis_villages.end()){
+                        cerr << "Village ID " << d.village_id << " not found in vis_villages!::HCState" << endl;
+                        // exit(1);
+                    }
+                    cout << "This may be the error" << endl;
                     t.vis_villages[d.village_id] = true;
+                    cout << "This is not the error" << endl;
                 }
             }
         }
@@ -466,6 +575,7 @@ public:
         return successors; 
     }
 
+
 };
 
 /**
@@ -473,14 +583,14 @@ public:
  * 
  * @param hcs hill climbing state
  */
-float eval_state(HCState hcs) {
+double eval_state(HCState hcs) {
     return plan_value(hcs.hplans) - plan_cost(hcs.hplans);
 }
 
 /**
  * @brief compares two states and returns true if state1 >= state2
  */
-bool cmp_states(HCState state1, HCState state2, float (*eval_func)(HCState), bool red = false) {
+bool cmp_states(HCState state1, HCState state2, double (*eval_func)(HCState), bool red = false) {
     if (red) {
         return eval_func(state1) <= eval_func(state2);
     }
@@ -514,6 +624,10 @@ public:
             HelicopterPlan hplan;
             hplan.helicopter_id = heli.id;
             // get all villages within distance capacity from home city
+            if (heli.home_city_id <= 0 || (size_t) heli.home_city_id > data.cities.size()) {
+                cerr << "City ID " << heli.home_city_id << " not found in data.cities!::sample" << endl;
+                exit(1);
+            }
             auto nearby_villages = villagesWithinDistance(data.villages, heli.distance_capacity, data.cities[heli.home_city_id - 1]);
             // get all possible paths (up to 2 villages) within distance capacity from home city
             auto allPaths = planAllPaths(data.cities[heli.home_city_id - 1], nearby_villages, heli.distance_capacity);
@@ -538,7 +652,7 @@ public:
     }
 
     HCState estimated_global_extrema() {
-        HCState global_state;
+        HCState global_state=b_states[0];
         for (auto state : b_states) {
             if (cmp_states(state, global_state, eval_state, red)) {
                 global_state = state;
@@ -555,51 +669,71 @@ public:
 
 
 /**
- * @brief gets the next succesor (best)
+ * @brief gets the next best successor from a given state
  */
-HCState get_best_successor(HCState state, bool red=false) {
+HCState get_best_successor(HCState state, bool red = false) {
     auto successors = state.get_successors();
-    HCState best_state = state;
-    for (auto successor: successors) {
-        if (cmp_states(best_state, state, eval_state, red)) {
-            best_state = successor;
-        }
-        
+
+    // If there are no successors, return the current state
+    if (successors.empty()) {
+        return state;
     }
-    return best_state;
+
+    // Initialize best_state with the first successor
+    HCState best_state = successors[0];
+
+    // Iterate through the rest of the successors to find the best one
+    for (size_t i = 1; i < successors.size(); ++i) {
+        if (cmp_states(successors[i], best_state, eval_state, red)) {
+            best_state = successors[i];
+        }
+    }
+    
+    // An optional improvement is to check if the best successor is actually better than the original state
+    if (cmp_states(best_state, state, eval_state, red)) {
+        return best_state;
+    }
+    
+    return state; // No better successor found, return original state
 }
 
 
 /**
  * @brief general code for hill climbing with random restarts
- * 
- * @param cstate current state
- * @param bs_state best succsor state
+ * * @param cstate current state
  * @param space search space
  * @param timer termination condition
- * 
- * @remark this restarts under two condition 1. restart eps 2. local extrema
+ * @param red flag for reduction (minimization)
  */
-void hcrr(Timer timer, HCState cstate, HCSpace space, bool red=false) {
-    if (timer.check_term()) {
+void hcrr(Timer& timer, HCState cstate, HCSpace& space, bool red = false) {
+    // Start the timer
+    timer.start();
+    
+    // Main loop for hill climbing with random restarts
+    while (!timer.check_term()) {
         
-        HCState bs_state = get_best_successor(cstate);
+        // Find the best successor
+        HCState bs_state = get_best_successor(cstate, red);
 
-        // moving to a new search (found a local maxima)
+        // Check for a local maximum (no improvement)
         if (!cmp_states(bs_state, cstate, eval_state, red)) {
-            space.add_to_lm(cstate);
-            hcrr(timer, space.sample(), space);
+            space.add_to_lm(cstate); // Add the local maximum to the best states
+            cstate = space.sample(); // Random restart
         }
-
+        
+        // Check if it's time for a random restart based on interval
         else if (timer.restart()) {
-            hcrr(timer, space.sample(), space);
+            cstate = space.sample(); // Random restart
         }
-
-        else{
-            hcrr(timer, bs_state,space, red);
+        
+        // Otherwise, move to the best successor
+        else {
+            cstate = bs_state; // Climb the hill
         }
     }
-    return;
+
+    // After the loop terminates, add the final state to the list of local maxima
+    space.add_to_lm(cstate);
 }
 
 
@@ -610,6 +744,18 @@ void hcrr(Timer timer, HCState cstate, HCSpace space, bool red=false) {
  * * TODO: REPLACE THIS ENTIRE FUNCTION WITH YOUR ALGORITHM.
  */
 Solution solve(const ProblemData& problem) {
+    // populating hmap and vmap
+
+    
+    for (const auto& h : problem.helicopters) {
+        hmap[h.id] = new Helicopter(h);
+    }
+
+    for (const auto& v : problem.villages) {
+        vmap[v.id] = new Village(v);
+    }
+    
+    
     cout << "Starting solver..." << endl;
 
     Solution solution;
@@ -619,7 +765,7 @@ Solution solve(const ProblemData& problem) {
     // This will definitely violate constraints but shows the structure.
     
     // timer definition
-    float eps_restart = 60;
+    double eps_restart = 60;
     Timer timer(problem.time_limit_minutes * 60, eps_restart);
 
     // maximization problem 
