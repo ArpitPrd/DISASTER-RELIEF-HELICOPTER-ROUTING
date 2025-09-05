@@ -13,6 +13,7 @@ using hrc = time_point<high_resolution_clock>;
 
 map<int, Helicopter*> hmap;
 map<int, Village*> vmap;
+int cnt;
 
 
 
@@ -114,7 +115,8 @@ public:
     bool check_term() {
         hrc ts = now();
         auto duration = duration_cast<seconds>(ts-start_ts);
-        if (duration.count() >= end_time) {
+        // cout << duration.count() << " " << end_time << endl;
+        if (duration.count()+40 >= end_time) {
             return true;
         }
         return false; 
@@ -728,6 +730,8 @@ void hcrr(Timer& timer, HCState cstate, HCSpace& space, bool red = false) {
         
         // Otherwise, move to the best successor
         else {
+            // cout << "[hcrr] I am Climbing the hill for the " << cnt << "th time" << endl;
+            cnt += 1;
             cstate = bs_state; // Climb the hill
         }
     }
@@ -757,7 +761,7 @@ Solution solve(const ProblemData& problem) {
     
     
     cout << "Starting solver..." << endl;
-
+    cnt = 0;
     Solution solution;
 
     // --- START OF PLACEHOLDER LOGIC ---
