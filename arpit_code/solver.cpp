@@ -2,6 +2,7 @@
 #include <iostream>
 #include <chrono>
 #include <map>
+#include <unordered_map>
 #include <algorithm>
 
 using namespace std;
@@ -223,7 +224,6 @@ std::vector<Trip> planAllPaths(
 vector<Trip> selectTripsWithinLimit(const vector<Trip>& trips, double Dmax) {
     vector<Trip> result;
     double totalDist = 0.0;
-
     for (const auto& trip : trips) {
         if (totalDist + trip.trip_distance <= Dmax) {
             result.push_back(trip);
@@ -262,12 +262,44 @@ Trip assignPackages(Trip t, int wcap, vector<PackageInfo>& pack) {
         int assignedThisType = 0;
 
         // Assign uniformly across all villages
-        for (auto& d : t.drops) {
-            if (pkgType == 0) d.dry_food = X;
-            if (pkgType == 1) d.perishable_food = X;
-            if (pkgType == 2) d.other_supplies = X;
+        for (auto& d : t.drops){
+            int N = 0;
+            if (pkgType == 0){
+                if(X > d.v.rem_population_food){
+                    d.dry_food += d.v.rem_population_food;
+                }
+                else{
+                    d.dry_food += X;
+                }
+                N = d.dry_food;
+                d.v.rem_population_food -= N;
+            }
+            if (pkgType == 1){
+                if (X > d.v.rem_population_food)
+                {
+                    d.perishable_food += d.v.rem_population_food;
+                }
+                else
+                {
+                    d.perishable_food += X;
+                } 
+                N = d.perishable_food;
+                d.v.rem_population_food -= N;
+            }
+            if (pkgType == 2){
+                if (X > d.v.rem_population_other)
+                {
+                    d.other_supplies += d.v.rem_population_other;
+                }
+                else
+                {
+                    d.perishable_food += X;
+                }
+                N = d.other_supplies;
+                d.v.rem_population_other -= N;
+            }
             assignedThisType += X * pack[pkgType].weight;
-            t.total_value += X * pack[pkgType].value;
+            t.total_value += N * pack[pkgType].value;
         }
 
         // Adjust if overshoot
@@ -324,7 +356,6 @@ Trip assignPackages(Trip t, int wcap, vector<PackageInfo>& pack) {
 class HCSpace {
 public:
     vector<HCState> b_states;
-    
     ProblemData data;
     bool red;
     
@@ -344,7 +375,6 @@ public:
             auto allPaths = planAllPaths(data.cities[heli.home_city_id - 1], nearby_villages, heli.distance_capacity);
             // select trips within distance capacity
             auto selectedTrips = selectTripsWithinLimit(allPaths, heli.distance_capacity);
-            
             // assign packages to each trip
             for (auto& trip : selectedTrips) {
                 trip = assignPackages(trip, heli.weight_capacity, data.packages);
@@ -391,6 +421,13 @@ public:
     }
     HCState(vector<HelicopterPlan> h) {
         this->h = h;
+        for(HelicopterPlan heli : h){
+            for(Trip t : heli.trips){
+                for(Drop d : t.drops){
+                    t.vis_villages[d.village_id] = true;
+                }
+            }
+        }
     }
 
     vector<HCState> get_successors() { // TODO
@@ -413,13 +450,16 @@ public:
         vector<HCState> successors;
         for(HelicopterPlan heli : this->h){
             float total = all_trip_cost(heli);
-            for(Trip t : heli.trips){
+            vector<int> size_check(heli.trips.size(), 0);
+            for(int i = 0; i < heli.trips.size(); i++){
+                Trip t = heli.trips[i];
                 Trip temp = t;
                 int length = t.drops.size();
                 float d = distance(t.drops[length - 1].v.coords, hmap[heli.helicopter_id]->home_city_coords);
                 float cur_trip_cost = trip_cost(t, *hmap[heli.helicopter_id]);
                 for(int i = 0; i < data.villages.size(); i++){
-                    if(data.villages[i].id == t.drops[length-1].village_id){
+                    if (t.vis_villages[data.villages[i].id])
+                    {
                         continue;
                     }
                     float d1 = distance(data.villages[i].coords, t.drops[length - 1].v.coords);
@@ -427,11 +467,11 @@ public:
                     if (((t.trip_distance - d + d1 + d2) <= hmap[heli.helicopter_id]->distance_capacity) &&
                         (total - d + d1 + d2) <= data.d_max)
                     {
-                        
                         Drop new_village;
                         new_village.v = data.villages[i];
                         new_village.village_id = data.villages[i].id;
                         t.drops.push_back(new_village);
+                        t.vis_villages[data.villages[i].id] = true;
                         t = assignPackages(t, hmap[heli.helicopter_id]->weight_capacity, data.packages);
                         successors.push_back(*this);
                         t = temp;
@@ -439,19 +479,52 @@ public:
                 }
                 
 
-                for(int i = 0; i < length; i++){
-                    for(int j = i+1; j < length; j++){
-                        swap(t.drops[i], t.drops[j]);
-                        float new_trip_cost = trip_cost(t, *hmap[heli.helicopter_id]);
-                        if (new_trip_cost <= hmap[heli.helicopter_id]->distance_capacity &&
-                            total - cur_trip_cost + new_trip_cost <= data.d_max){
-                            successors.push_back(*this);
-                        }
-                        swap(t.drops[i], t.drops[j]);
+                // for(int i = 0; i < length; i++){
+                //     for(int j = i+1; j < length; j++){
+                //         swap(t.drops[i], t.drops[j]);
+                //         float new_trip_cost = trip_cost(t, *hmap[heli.helicopter_id]);
+                //         if (new_trip_cost <= hmap[heli.helicopter_id]->distance_capacity &&
+                //             total - cur_trip_cost + new_trip_cost <= data.d_max){
+                //             successors.push_back(*this);
+                //         }
+                //         swap(t.drops[i], t.drops[j]);
                             
-                    }
+                //     }
+                // }
+
+                if(t.drops.size() == 1){
+                    size_check[i] = 1;
+                    continue;
+                }
+                // t.drops.pop_back();
+                // t = assignPackages(t, hmap[heli.helicopter_id]->weight_capacity, data.packages);
+                // successors.push_back(*this);
+                // t = temp;
+                
+            }
+
+            for(int i = 0; i < data.villages.size(); i++){
+                Drop d;
+                d.v = data.villages[i];
+                d.village_id = data.villages[i].id;
+                Trip t;
+                t.vis_villages[data.villages[i].id] = true;
+                t.drops.push_back(d);
+                t = assignPackages(t, hmap[heli.helicopter_id]->weight_capacity, data.packages);
+                heli.trips.push_back(t);
+                successors.push_back(*this);
+                heli.trips.pop_back();
+            }
+
+            for(int i = 0; i < heli.trips.size(); i++){
+                if(size_check[i] == 1){
+                    Trip temp = heli.trips[i];
+                    heli.trips.erase(heli.trips.begin() + i);
+                    successors.push_back(*this);
+                    heli.trips.insert(heli.trips.begin()+i, temp);
                 }
             }
+
         }
         return successors; 
     }

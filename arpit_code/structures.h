@@ -31,7 +31,8 @@ struct Village {
     int id;
     Point coords;
     int population;
-    int rem_population;  // added people remaining to be served
+    int rem_population_food;
+    int rem_population_other;  // added people remaining to be served
 };
 
 struct Helicopter {
@@ -63,6 +64,7 @@ struct Drop {
 };
 
 struct Trip {
+    unordered_map<int, bool> vis_villages;
     int dry_food_pickup;
     int perishable_food_pickup;
     int other_supplies_pickup;
