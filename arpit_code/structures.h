@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <cmath> // For sqrt and pow
+#include <unordered_map>
 using namespace std;
 
 // --- GEOMETRIC & ENTITY STRUCTURES ---
@@ -34,7 +35,23 @@ struct Village {
     int rem_population_food;
     int rem_population_other;  // added people remaining to be served
 };
+struct Drop {
+    Village v;
+    int village_id;
+    int dry_food;
+    int perishable_food;
+    int other_supplies;
+};
 
+struct Trip {
+    unordered_map<int, bool> vis_villages;
+    int dry_food_pickup;
+    int perishable_food_pickup;
+    int other_supplies_pickup;
+    double trip_distance; // total distance of the trip
+    double total_value; //value of the trip
+    vector<Drop> drops;
+};
 struct Helicopter {
     int id;
     int home_city_id;
@@ -55,23 +72,8 @@ struct ProblemData {
     vector<Helicopter> helicopters;
 };
 
-struct Drop {
-    Village v;
-    int village_id;
-    int dry_food;
-    int perishable_food;
-    int other_supplies;
-};
 
-struct Trip {
-    unordered_map<int, bool> vis_villages;
-    int dry_food_pickup;
-    int perishable_food_pickup;
-    int other_supplies_pickup;
-    double trip_distance; // total distance of the trip
-    double total_value; //value of the trip
-    vector<Drop> drops;
-};
+
 
 struct HelicopterPlan {
     int helicopter_id;

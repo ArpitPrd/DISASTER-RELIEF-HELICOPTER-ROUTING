@@ -14,6 +14,8 @@ using hrc = time_point<high_resolution_clock>;
 map<int, Helicopter*> hmap;
 map<int, Village*> vmap;
 
+
+
 /**
  * @brief calculates the distance in a trip
  */
@@ -62,6 +64,7 @@ float plan_cost(vector<HelicopterPlan> hps) {
     for (auto hp: hps) {
         cost += all_trip_cost(hp);
     }
+    return cost;
 }
 
 float plan_value(vector<HelicopterPlan> hps){
@@ -71,6 +74,7 @@ float plan_value(vector<HelicopterPlan> hps){
     }
     return value;
 }
+
 
 /**
  * @brief general purpose Timer contains term criteria, restart criteria
@@ -340,8 +344,148 @@ Trip assignPackages(Trip t, int wcap, vector<PackageInfo>& pack) {
     return t;
 }
 
+/**
+ * @brief to any node, you have to define the state space and the succesor function on your own
+ * @note TODO : add a map for each helicopter for each trip maintaining cities travelled in the trip
+ */
+class HCState {
+public:
+    vector<HelicopterPlan> hplans;
+    ProblemData data;
+    
+    HCState() {
+        ;
+    }
+    HCState(vector<HelicopterPlan> h) {
+        this->hplans = h;
+        for(HelicopterPlan heli : h){
+            for(Trip t : heli.trips){
+                for(Drop d : t.drops){
+                    t.vis_villages[d.village_id] = true;
+                }
+            }
+        }
+    }
 
+    vector<HCState> get_successors() { // TODO
+        /*
 
+        For God Verma to implement
+
+            psuedo code to write successor function
+
+            for helicopterplan in HPs:
+                for trip in helicopterplan.trips:
+                    add one more village to the trip (if possible) -> done
+                    remove one village from the trip (if possible) -> done
+                    swap two villages in the trip (if possible) !PENDING
+                    modify the packages assigned to the trip (if possible) !PENDING
+                    create a new state with this modified helicopterplan -> done
+                    add this new state to the list of successors -> done
+                
+        */
+        vector<HCState> successors;
+        for(HelicopterPlan heli : this->hplans){
+            float total = all_trip_cost(heli);
+            vector<int> size_check(heli.trips.size(), 0);
+            for(size_t i = 0; i < heli.trips.size(); i++){
+                Trip t = heli.trips[i];
+                Trip temp = t;
+                int length = t.drops.size();
+                float d = distance(t.drops[length - 1].v.coords, hmap[heli.helicopter_id]->home_city_coords);
+                // float cur_trip_cost = trip_cost(t, *hmap[heli.helicopter_id]);
+                for(size_t i = 0; i < data.villages.size(); i++){
+                    if (t.vis_villages[data.villages[i].id])
+                    {
+                        continue;
+                    }
+                    float d1 = distance(data.villages[i].coords, t.drops[length - 1].v.coords);
+                    float d2 = distance(data.villages[i].coords, hmap[heli.helicopter_id]->home_city_coords);
+                    if (((t.trip_distance - d + d1 + d2) <= hmap[heli.helicopter_id]->distance_capacity) &&
+                        (total - d + d1 + d2) <= data.d_max)
+                    {
+                        Drop new_village;
+                        new_village.v = data.villages[i];
+                        new_village.village_id = data.villages[i].id;
+                        t.drops.push_back(new_village);
+                        t.vis_villages[data.villages[i].id] = true;
+                        t = assignPackages(t, hmap[heli.helicopter_id]->weight_capacity, data.packages);
+                        successors.push_back(*this);
+                        t = temp;
+                    }
+                }
+                
+
+                // for(int i = 0; i < length; i++){
+                //     for(int j = i+1; j < length; j++){
+                //         swap(t.drops[i], t.drops[j]);
+                //         float new_trip_cost = trip_cost(t, *hmap[heli.helicopter_id]);
+                //         if (new_trip_cost <= hmap[heli.helicopter_id]->distance_capacity &&
+                //             total - cur_trip_cost + new_trip_cost <= data.d_max){
+                //             successors.push_back(*this);
+                //         }
+                //         swap(t.drops[i], t.drops[j]);
+                            
+                //     }
+                // }
+
+                if(t.drops.size() == 1){
+                    size_check[i] = 1;
+                    continue;
+                }
+                // t.drops.pop_back();
+                // t = assignPackages(t, hmap[heli.helicopter_id]->weight_capacity, data.packages);
+                // successors.push_back(*this);
+                // t = temp;
+                
+            }
+
+            for(size_t i = 0; i < data.villages.size(); i++){
+                Drop d;
+                d.v = data.villages[i];
+                d.village_id = data.villages[i].id;
+                Trip t;
+                t.vis_villages[data.villages[i].id] = true;
+                t.drops.push_back(d);
+                t = assignPackages(t, hmap[heli.helicopter_id]->weight_capacity, data.packages);
+                heli.trips.push_back(t);
+                successors.push_back(*this);
+                heli.trips.pop_back();
+            }
+
+            for(size_t i = 0; i < heli.trips.size(); i++){
+                if(size_check[i] == 1){
+                    Trip temp = heli.trips[i];
+                    heli.trips.erase(heli.trips.begin() + i);
+                    successors.push_back(*this);
+                    heli.trips.insert(heli.trips.begin()+i, temp);
+                }
+            }
+
+        }
+        return successors; 
+    }
+
+};
+
+/**
+ * @brief produces the objective function for the given state s
+ * 
+ * @param hcs hill climbing state
+ */
+float eval_state(HCState hcs) {
+    return plan_value(hcs.hplans) - plan_cost(hcs.hplans);
+}
+
+/**
+ * @brief compares two states and returns true if state1 >= state2
+ */
+bool cmp_states(HCState state1, HCState state2, float (*eval_func)(HCState), bool red = false) {
+    if (red) {
+        return eval_func(state1) <= eval_func(state2);
+    }
+    return eval_func(state1) >= eval_func(state2);
+}
 
 /**
  * @brief Defines the search problem space
@@ -395,7 +539,6 @@ public:
 
     HCState estimated_global_extrema() {
         HCState global_state;
-        float obj_global = std::numeric_limits<float>::lowest();
         for (auto state : b_states) {
             if (cmp_states(state, global_state, eval_state, red)) {
                 global_state = state;
@@ -407,160 +550,18 @@ public:
 
 
 
-/**
- * @brief to any node, you have to define the state space and the succesor function on your own
- * @note TODO : add a map for each helicopter for each trip maintaining cities travelled in the trip
- */
-class HCState {
-public:
-    vector<HelicopterPlan> h;
-    ProblemData data;
-    
-    HCState() {
-        ;
-    }
-    HCState(vector<HelicopterPlan> h) {
-        this->h = h;
-        for(HelicopterPlan heli : h){
-            for(Trip t : heli.trips){
-                for(Drop d : t.drops){
-                    t.vis_villages[d.village_id] = true;
-                }
-            }
-        }
-    }
 
-    vector<HCState> get_successors() { // TODO
-        /*
 
-        For God Verma to implement
 
-            psuedo code to write successor function
-
-            for helicopterplan in HPs:
-                for trip in helicopterplan.trips:
-                    add one more village to the trip (if possible) -> done
-                    remove one village from the trip (if possible) -> done
-                    swap two villages in the trip (if possible) !PENDING
-                    modify the packages assigned to the trip (if possible) !PENDING
-                    create a new state with this modified helicopterplan -> done
-                    add this new state to the list of successors -> done
-                
-        */
-        vector<HCState> successors;
-        for(HelicopterPlan heli : this->h){
-            float total = all_trip_cost(heli);
-            vector<int> size_check(heli.trips.size(), 0);
-            for(int i = 0; i < heli.trips.size(); i++){
-                Trip t = heli.trips[i];
-                Trip temp = t;
-                int length = t.drops.size();
-                float d = distance(t.drops[length - 1].v.coords, hmap[heli.helicopter_id]->home_city_coords);
-                float cur_trip_cost = trip_cost(t, *hmap[heli.helicopter_id]);
-                for(int i = 0; i < data.villages.size(); i++){
-                    if (t.vis_villages[data.villages[i].id])
-                    {
-                        continue;
-                    }
-                    float d1 = distance(data.villages[i].coords, t.drops[length - 1].v.coords);
-                    float d2 = distance(data.villages[i].coords, hmap[heli.helicopter_id]->home_city_coords);
-                    if (((t.trip_distance - d + d1 + d2) <= hmap[heli.helicopter_id]->distance_capacity) &&
-                        (total - d + d1 + d2) <= data.d_max)
-                    {
-                        Drop new_village;
-                        new_village.v = data.villages[i];
-                        new_village.village_id = data.villages[i].id;
-                        t.drops.push_back(new_village);
-                        t.vis_villages[data.villages[i].id] = true;
-                        t = assignPackages(t, hmap[heli.helicopter_id]->weight_capacity, data.packages);
-                        successors.push_back(*this);
-                        t = temp;
-                    }
-                }
-                
-
-                // for(int i = 0; i < length; i++){
-                //     for(int j = i+1; j < length; j++){
-                //         swap(t.drops[i], t.drops[j]);
-                //         float new_trip_cost = trip_cost(t, *hmap[heli.helicopter_id]);
-                //         if (new_trip_cost <= hmap[heli.helicopter_id]->distance_capacity &&
-                //             total - cur_trip_cost + new_trip_cost <= data.d_max){
-                //             successors.push_back(*this);
-                //         }
-                //         swap(t.drops[i], t.drops[j]);
-                            
-                //     }
-                // }
-
-                if(t.drops.size() == 1){
-                    size_check[i] = 1;
-                    continue;
-                }
-                // t.drops.pop_back();
-                // t = assignPackages(t, hmap[heli.helicopter_id]->weight_capacity, data.packages);
-                // successors.push_back(*this);
-                // t = temp;
-                
-            }
-
-            for(int i = 0; i < data.villages.size(); i++){
-                Drop d;
-                d.v = data.villages[i];
-                d.village_id = data.villages[i].id;
-                Trip t;
-                t.vis_villages[data.villages[i].id] = true;
-                t.drops.push_back(d);
-                t = assignPackages(t, hmap[heli.helicopter_id]->weight_capacity, data.packages);
-                heli.trips.push_back(t);
-                successors.push_back(*this);
-                heli.trips.pop_back();
-            }
-
-            for(int i = 0; i < heli.trips.size(); i++){
-                if(size_check[i] == 1){
-                    Trip temp = heli.trips[i];
-                    heli.trips.erase(heli.trips.begin() + i);
-                    successors.push_back(*this);
-                    heli.trips.insert(heli.trips.begin()+i, temp);
-                }
-            }
-
-        }
-        return successors; 
-    }
-
-};
-
-/**
- * @brief compares two states and returns true if state1 >= state2
- */
-bool cmp_states(HCState state1, HCState state2, float (*func) (HCState), bool red=false) {
-    if (!red) {
-        if (eval_state(state1) >= eval_state(state2)) {
-            return true;
-        }
-        return false;
-    }
-    else {
-        if (eval_state(state1) <= eval_state(state2)) {
-            return true;
-        }
-        return false;
-    }
-    return false;
-}
 
 /**
  * @brief gets the next succesor (best)
  */
 HCState get_best_successor(HCState state, bool red=false) {
     auto successors = state.get_successors();
-    float best_obj_value = std::numeric_limits<float>::min();
     HCState best_state = state;
     for (auto successor: successors) {
-        float curr_obj_fn = eval_state(successor);
         if (cmp_states(best_state, state, eval_state, red)) {
-            best_obj_value = curr_obj_fn;
             best_state = successor;
         }
         
@@ -568,14 +569,7 @@ HCState get_best_successor(HCState state, bool red=false) {
     return best_state;
 }
 
-/**
- * @brief produces the objective function for the given state s
- * 
- * @param hcs hill climbing state
- */
-float eval_state(HCState hcs) {
-    return plan_value(hcs.h) - plan_cost(hcs.h);
-}
+
 /**
  * @brief general code for hill climbing with random restarts
  * 
@@ -588,7 +582,6 @@ float eval_state(HCState hcs) {
  */
 void hcrr(Timer timer, HCState cstate, HCSpace space, bool red=false) {
     if (timer.check_term()) {
-        float obj_fn = std::numeric_limits<float>::lowest();  // todo: have to change
         
         HCState bs_state = get_best_successor(cstate);
 
@@ -643,11 +636,7 @@ Solution solve(const ProblemData& problem) {
 
     HCState best_sol = hcspace.estimated_global_extrema();
 
-    for (const auto& helicopter : best_sol.h) {
-        HelicopterPlan plan;
-        solution.push_back(plan);
-    }
-    
+    solution = best_sol.hplans;
     // --- END OF PLACEHOLDER LOGIC ---
 
     cout << "Solver finished." << endl;
