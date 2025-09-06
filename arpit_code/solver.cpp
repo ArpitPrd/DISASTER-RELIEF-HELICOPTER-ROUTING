@@ -13,6 +13,7 @@ using hrc = time_point<high_resolution_clock>;
 
 map<int, Helicopter*> hmap;
 map<int, Village*> vmap;
+map<int, map<int, map<Trip*, bool>>> vill_to_trip_map;
 int cnt;
 
 
@@ -29,6 +30,20 @@ double trip_distance_travelled(Trip t, Helicopter h) {
     }
     dist += distance(prev_coords, h.home_city_coords);
     return dist;
+}
+
+float all_trip_distance(HelicopterPlan h){
+    float all_trip_dist = 0;
+    for(Trip t : h.trips){
+        float dist = 0;
+        Point prev_coords = hmap[h.helicopter_id]->home_city_coords;
+        for (Drop d : t.drops)
+        {
+            dist += distance(prev_coords, d.v.coords);
+            prev_coords = d.v.coords;
+        }
+        dist += distance(prev_coords, hmap[h.helicopter_id]->home_city_coords);
+    }
 }
 
 /**
@@ -49,40 +64,40 @@ double trip_cost(Trip t, int h_id) {
 /**
  * @brief use this for calculation of scores for one trip
  */
-double all_trip_cost(HelicopterPlan hplan) {
+float all_trip_cost(HelicopterPlan hplan) {
     if (hmap.find(hplan.helicopter_id) == hmap.end()) {
         cerr << "Helicopter ID " << hplan.helicopter_id << " not found in hmap!::all_trip_cost" << endl;
         return 0; // or handle the error as appropriate
     }
-    double sum_across_trips = 0;
+    float sum_across_trips = 0;
     for (Trip trip : hplan.trips) {
         sum_across_trips += trip_cost(trip, hplan.helicopter_id);
     }
     return sum_across_trips;
 }
 
-double all_trip_value(HelicopterPlan hplan){
+float all_trip_value(HelicopterPlan hplan){
     if (hmap.find(hplan.helicopter_id) == hmap.end()) {
         cerr << "Helicopter ID " << hplan.helicopter_id << " not found in hmap!::all_trip_value" << endl;
         return 0; // or handle the error as appropriate
     }
-    double value_across_trips = 0;
+    float value_across_trips = 0;
     for(Trip trip : hplan.trips){
         value_across_trips += trip.total_value;
     }
     return value_across_trips;
 }
 
-double plan_cost(vector<HelicopterPlan> hps) {
-    double cost = 0;
+float plan_cost(vector<HelicopterPlan> hps) {
+    float cost = 0;
     for (auto hplan: hps) {
         cost += all_trip_cost(hplan);
     }
     return cost;
 }
 
-double plan_value(vector<HelicopterPlan> hplans){
-    double value = 0;
+float plan_value(vector<HelicopterPlan> hplans){
+    float value = 0;
     for(HelicopterPlan hplan : hplans){
         value += all_trip_value(hplan);
     }
@@ -414,7 +429,6 @@ void add_village_to_trip(Trip& trip, const Village& new_village) {
     Drop new_drop;
     new_drop.village_id = new_village.id;
     new_drop.v = new_village;
-
     // The trip's distance will be recalculated later by `assign_packages_to_trip`, so we just add the drop.
     trip.drops.push_back(new_drop);
 }
@@ -431,22 +445,26 @@ void swap_villages_in_trip(Trip& trip, size_t index1, size_t index2) {
     }
 }
 
-bool is_valid_plan(const HelicopterPlan& hp, double dmax) {
-    // Check if the helicopter plan's total distance exceeds DMax
-    double total_distance = all_trip_cost(hp);
-    
-    // Assumes `data` contains a way to find the Dmax for the helicopter.
-    // This part of the logic needs to be integrated with the ProblemData structure.
-    
-
-    if (total_distance > dmax) {
-       return false;
+bool is_valid_village(int heli_id, int vill_id, Trip& t){
+    if(vill_to_trip_map[vill_id][heli_id][&t]){
+        return true;
     }
-
-    return true;
+    return false;
 }
 
-Drop prepare_drop(int vid, ) {
+// NOT req
+
+// bool is_valid_plan(const HelicopterPlan& hp, double dmax) {                   
+//     // Check if the helicopter plan's total distance exceeds DMax
+//     double total_distance = all_trip_distance(hp);
+//     if (total_distance > dmax) {
+//        return false;
+//     }
+
+//     return true;
+// }
+
+Drop prepare_drop(int vid) {
     Drop d;
     d.dry_food = 0;
     d.other_supplies = 0;
@@ -455,13 +473,22 @@ Drop prepare_drop(int vid, ) {
     return d; // TODO
 }
 
-vector<Trip> try_adding_village(Trip t, double dcap) {
-    // TODO add helicopter plans etc here along with 
+vector<Trip> try_adding_village(Trip t, int heli_id, float total_dist, float Dmax) { 
     vector<Trip> sug_trips;
+    float trip_distance = t.trip_distance;
+    Village last_vill = t.drops.back().v;
+    float last_vill_dist = distance(last_vill.coords, hmap[heli_id]->home_city_coords);
     for (pair<int, Village*> p: vmap) {
-        if (trip_distance_travelled())
+        float newvill_to_city = distance(p.second->coords, hmap[heli_id]->home_city_coords);
+        float lastvill_to_newvill = distance(last_vill.coords, p.second->coords);
+        float new_dist = trip_distance - last_vill_dist + (newvill_to_city + lastvill_to_newvill);
+        float new_total_dist = total_dist - last_vill_dist + (newvill_to_city + lastvill_to_newvill);
+        if(new_dist <= hmap[heli_id]->distance_capacity && new_total_dist <= Dmax){
+            add_village_to_trip(t, *p.second);
+            t.trip_distance = new_dist;
+            sug_trips.push_back(t);
+        }
     }
-    // TODO
 }
 
 /**
@@ -495,19 +522,23 @@ public:
         vector<HCState> succ;
         for (size_t h_idx = 0; h_idx < this->hplans.size(); h_idx++) {
             vector<Trip> all_trips = this->hplans[h_idx].trips;
+            float total_trips_dist = all_trip_distance(hplans[h_idx]);
             for (size_t t_idx = 0; t_idx <  all_trips.size(); t_idx++) {
                 // we either add a village or remove a village
                 Trip expand_this_trip = all_trips[t_idx];
-                // addding a village
+                // adding a village
 
-                vector<Trip> meta_trips = try_adding_village(expand_this_trip, hmap[this->hplans[h_idx].helicopter_id]->distance_capacity);
-
+                vector<Trip> meta_trips = try_adding_village(expand_this_trip, this->hplans[h_idx].helicopter_id, total_trips_dist, data.d_max);
                 for (Trip sug_trip: meta_trips) {
                     HCState hcs_temp(this->hplans, data);
+                    assignPackages(sug_trip, hmap[hplans[h_idx].helicopter_id]->weight_capacity, data.packages);
                     hcs_temp.hplans[h_idx].trips[t_idx] = sug_trip;
-
                     succ.push_back(hcs_temp);
                 }
+            }
+
+            for(pair<int, Village*> p : vmap){
+
             }
         }
     }
@@ -678,7 +709,7 @@ public:
 
 
         }
-        HCState state(hplans);
+        HCState state(hplans, data);
         return state;
     }
 
