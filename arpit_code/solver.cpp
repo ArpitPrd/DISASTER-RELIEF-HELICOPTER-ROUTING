@@ -21,28 +21,28 @@ int cnt;
 /**
  * @brief calculates the distance in a trip
  */
-double trip_distance_travelled(Trip t, Helicopter h) {
+double trip_distance_travelled(Trip t, Point home) {
     double dist = 0;
-    Point prev_coords = h.home_city_coords;
+    Point prev_coords = home;
     for (Drop d: t.drops) {
         dist += distance(prev_coords, d.v.coords);
         prev_coords = d.v.coords;
     }
-    dist += distance(prev_coords, h.home_city_coords);
+    dist += distance(prev_coords, home);
     return dist;
 }
 
-float all_trip_distance(HelicopterPlan h){
+float all_trip_distance(vector<Trip> trips, Point home){
     float all_trip_dist = 0;
-    for(Trip t : h.trips){
+    for(Trip t : trips){
         float dist = 0;
-        Point prev_coords = hmap[h.helicopter_id]->home_city_coords;
+        Point prev_coords = home;
         for (Drop d : t.drops)
         {
             dist += distance(prev_coords, d.v.coords);
             prev_coords = d.v.coords;
         }
-        dist += distance(prev_coords, hmap[h.helicopter_id]->home_city_coords);
+        dist += distance(prev_coords, home);
     }
 }
 
@@ -55,7 +55,7 @@ double trip_cost(Trip t, int h_id) {
         return 0; // or handle the error as appropriate
     }
     Helicopter h = *hmap[h_id];
-    double dist = trip_distance_travelled(t, h);
+    double dist = trip_distance_travelled(t, h.home_city_coords);
     double cost = h.fixed_cost + h.alpha*dist;
     return cost;
 }
@@ -424,11 +424,18 @@ bool can_add_village_to_trip(const Trip& current_trip, const Village& new_villag
     return true; // The total Dmax check would be done in the main successor function
 }
 
+Drop prepare_drop(Village v) {
+    Drop d;
+    d.dry_food = 0;
+    d.other_supplies = 0;
+    d.perishable_food = 0;
+    d.village_id = v.id;
+    d.v = v;
+    return d; // TODO
+}
 
 void add_village_to_trip(Trip& trip, const Village& new_village) {
-    Drop new_drop;
-    new_drop.village_id = new_village.id;
-    new_drop.v = new_village;
+    Drop new_drop = prepare_drop(new_village);
     // The trip's distance will be recalculated later by `assign_packages_to_trip`, so we just add the drop.
     trip.drops.push_back(new_drop);
 }
@@ -452,44 +459,18 @@ bool is_valid_village(int heli_id, int vill_id, Trip& t){
     return false;
 }
 
-// NOT req
 
-// bool is_valid_plan(const HelicopterPlan& hp, double dmax) {                   
-//     // Check if the helicopter plan's total distance exceeds DMax
-//     double total_distance = all_trip_distance(hp);
-//     if (total_distance > dmax) {
-//        return false;
-//     }
-
-//     return true;
-// }
-
-Drop prepare_drop(int vid) {
-    Drop d;
-    d.dry_food = 0;
-    d.other_supplies = 0;
-    d.perishable_food = 0;
-    d.village_id = vid;
-    return d; // TODO
+bool check_dcap(double dcap, Trip t, Point home) {
+    double trip_dist = trip_distance_travelled(t, home);
+    return dcap >= trip_dist;
 }
 
-vector<Trip> try_adding_village(Trip t, int heli_id, float total_dist, float Dmax) { 
-    vector<Trip> sug_trips;
-    float trip_distance = t.trip_distance;
-    Village last_vill = t.drops.back().v;
-    float last_vill_dist = distance(last_vill.coords, hmap[heli_id]->home_city_coords);
-    for (pair<int, Village*> p: vmap) {
-        float newvill_to_city = distance(p.second->coords, hmap[heli_id]->home_city_coords);
-        float lastvill_to_newvill = distance(last_vill.coords, p.second->coords);
-        float new_dist = trip_distance - last_vill_dist + (newvill_to_city + lastvill_to_newvill);
-        float new_total_dist = total_dist - last_vill_dist + (newvill_to_city + lastvill_to_newvill);
-        if(new_dist <= hmap[heli_id]->distance_capacity && new_total_dist <= Dmax){
-            add_village_to_trip(t, *p.second);
-            t.trip_distance = new_dist;
-            sug_trips.push_back(t);
-        }
-    }
+bool check_dmax(double dmax, vector<Trip> trips, Point home) {
+    double total_trips_dist = all_trip_distance(trips, home);
+    return total_trips_dist <= dmax;
 }
+
+
 
 /**
  * @brief to any node, you have to define the state space and the succesor function on your own
@@ -517,18 +498,19 @@ public:
         }
     }
 
+    
+
     vector<HCState> get_successor() {
 
         vector<HCState> succ;
         for (size_t h_idx = 0; h_idx < this->hplans.size(); h_idx++) {
             vector<Trip> all_trips = this->hplans[h_idx].trips;
-            float total_trips_dist = all_trip_distance(hplans[h_idx]);
             for (size_t t_idx = 0; t_idx <  all_trips.size(); t_idx++) {
                 // we either add a village or remove a village
                 Trip expand_this_trip = all_trips[t_idx];
                 // adding a village
 
-                vector<Trip> meta_trips = try_adding_village(expand_this_trip, this->hplans[h_idx].helicopter_id, total_trips_dist, data.d_max);
+                vector<Trip> meta_trips = try_adding_village(expand_this_trip, this->hplans[h_idx].helicopter_id, data.d_max);
                 for (Trip sug_trip: meta_trips) {
                     HCState hcs_temp(this->hplans, data);
                     assignPackages(sug_trip, hmap[hplans[h_idx].helicopter_id]->weight_capacity, data.packages);
