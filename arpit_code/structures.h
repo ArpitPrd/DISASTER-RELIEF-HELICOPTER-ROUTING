@@ -5,6 +5,7 @@
 #include <cmath> // For sqrt and pow
 #include <set>
 #include <map>
+#include <iostream>
 using namespace std;
 
 // --- GEOMETRIC & ENTITY STRUCTURES ---
@@ -181,6 +182,7 @@ struct Helicopter {
      */
     bool check_dcap(Trip t) {
         double _trip_dist = trip_dist(t);
+        // cout << _trip_dist << "&" << distance_capacity << endl;
         return distance_capacity >= _trip_dist;
     }
 
@@ -208,7 +210,7 @@ struct Helicopter {
         d.other_supplies = 0;
         d.perishable_food = 0;
         d.v  = v;
-
+        d.village_id = d.v.id;
         return d;
     }
 
@@ -256,9 +258,12 @@ struct Helicopter {
         vector<Trip> sug_trips;
         vector<Trip> trip_for_h = trips;
         set<int> vids;
+        // cout << "start" << endl;
         for (Drop d: t.drops) {
+            // cout << "try adding "<< d.village_id << " " << d.v.id << endl;
             vids.insert(d.village_id);
         }
+        // cout << endl;
         for (pair<int, Village*> p: vmap) {
             if (vids.find(p.first)!=vids.end()) continue; // for uniqueness of the villages in a trip
             Village new_vill = *p.second;
@@ -273,6 +278,7 @@ struct Helicopter {
                 sug_trips.push_back(sug_trip);
             }
         }
+
         return sug_trips;
     }
 };

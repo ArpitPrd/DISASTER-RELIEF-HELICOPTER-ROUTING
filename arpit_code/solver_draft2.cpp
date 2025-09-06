@@ -40,9 +40,9 @@ vector<PackageInfo> packs;
  * @note highly expensive function, need to think of alternates
  */
 void assignPackages(Trip &t, double wcap) {
+    // cout << "in assign package" << endl;
     vector<Drop> drops = t.drops;
     int w = (int) wcap;
-
     vector<PackageInfo> _packs(packs);
 
     sort(_packs.begin(), _packs.end());
@@ -51,6 +51,7 @@ void assignPackages(Trip &t, double wcap) {
 
     vector<int> pops;
     for (Drop d: drops) {
+        // cout << "village id" << d.v.id << " " << d.village_id <<  endl;
         pops.push_back(d.v.population);
     }
     bool improvement_made = true;
@@ -61,30 +62,30 @@ void assignPackages(Trip &t, double wcap) {
         for (const auto& pack : _packs) {
             // Find a tuple that can accept this component
             for (size_t d_idx=0; d_idx<drops.size(); d_idx++) {
-
-                Drop drop = drops[d_idx];
+                // cout << d_idx << endl;
                 // Check global constraint
+                // cout << "packet weihh" << pack.weight << endl;
                 bool global_fits = (total_weight_used + pack.weight) <= w;
                 if (!global_fits) continue; // No need to check local if global fails
 
                 // ***MODIFIED: Check the new, specific local constraints***
+                // cout << "wcap" << w << endl;
                 bool local_fits = false;
                 if (pack.id == 0 || pack.id == 1) { // Component is a1 or a2
-                    if (drop.dry_food + drop.perishable_food + 1 <= 9 * pops[d_idx]) {
+                    if (drops[d_idx].dry_food + drops[d_idx].perishable_food + 1 <= 9 * pops[d_idx]) {
                         local_fits = true;
                     }
                 } else { // Component is a3
-                    if (drop.other_supplies + 1 <= pops[d_idx]) {
+                    if (drops[d_idx].other_supplies + 1 <= pops[d_idx]) {
                         local_fits = true;
                     }
                 }
-
                 if (local_fits) {
                     // Add the component to this tuple
-                    if (pack.id == 0) drop.dry_food++;
-                    else if (pack.id == 1) drop.perishable_food++;
-                    else drop.other_supplies++;
-                    
+                    if (pack.id == 0) drops[d_idx].dry_food+=1;
+                    else if (pack.id == 1) drops[d_idx].perishable_food+=1;
+                    else drops[d_idx].other_supplies+=1;
+                    // cout << drops[d_idx].village_id << " " <<  drops[d_idx].dry_food << " " << drops[d_idx].perishable_food << " " << drops[d_idx].other_supplies << endl;
                     total_weight_used += pack.weight;
                     improvement_made = true;
                     goto next_iteration; // Restart with the best component
@@ -104,7 +105,7 @@ void assignPackages(Trip &t, double wcap) {
     }
 
     t.drops = drops;
-
+    // cout << "exit assign package" << endl;
     return;
  }
 
@@ -218,12 +219,13 @@ public:
         vector<HCState> succ;
         for (size_t h_idx = 0; h_idx < hplans.size(); h_idx++) {
             vector<Trip> all_trips = hplans[h_idx].heli.trips;
-            cout << "all trips size, get_successor" << all_trips.size() << endl;
+            // cout << "all trips size, get_successor" << all_trips.size() << endl;
             for (size_t t_idx = 0; t_idx <  all_trips.size(); t_idx++) {
                 
                 // adding a village
                 Trip t = all_trips[t_idx];
                 vector<Trip> meta_trips = hplans[h_idx].heli.try_adding_village(t_idx, vmap);
+                // cout << "meta size" << meta_trips.size() << endl;
                 for (Trip sug_trip: meta_trips) {
                     HCState hcs_temp(hplans);
                     assignPackages(sug_trip, hplans[h_idx].heli.weight_capacity);
@@ -264,7 +266,7 @@ public:
      */
     HCState get_best_successor() {
         vector<HCState> succs = get_successor();
-        
+    
         HCState best_hcs = succs[0];
 
         for (HCState succ: succs) {
@@ -348,7 +350,7 @@ public:
         d.other_supplies = 0;
         d.perishable_food = 0;
         d.v  = v;
-
+        d.village_id = d.v.id;
         return d;
     }
 
@@ -365,7 +367,6 @@ public:
         t.dry_food_pickup = 0;
         t.other_supplies_pickup = 0;
         t.perishable_food_pickup = 0;
-
         return t;
     }
 
@@ -387,6 +388,8 @@ public:
         HCState state;
         for (const auto& heli : data.helicopters) {
             HelicopterPlan hplan;
+            hplan.heli = heli;
+            hplan.helicopter_id = heli.id;
             hplan.helicopter_id = heli.id;
 
             vector<Village> v_in_range = villagesWithinDistance(data.villages, heli.distance_capacity/2, heli.home_city_coords);
@@ -396,9 +399,10 @@ public:
             double d_tot = 0;
             for (Village v_pros: v_in_range) {
                 d_tot += distance(v_pros.coords, heli.home_city_coords);
-                if (d_tot < heli.d_max) {
+                // cout << d_tot << " " << heli.d_max << endl;
+                if (d_tot <= heli.d_max) {
                     Trip t = prepare_trip(v_pros);
-                    cout << "trip added" << endl;
+                    
                     hplan.heli.trips = {t};
                 }
             }
@@ -451,6 +455,7 @@ public:
     hrc last_restart_ts;
     double eps_restart;
     Timer(int end_time, int eps_restart) {
+        cout << "[warn] Terminiation in 20s" << endl;
         this->end_time = end_time;
         this->eps_restart = eps_restart;
     }
@@ -459,10 +464,10 @@ public:
         last_restart_ts = start_ts;
     }
     bool check_term() {
-        cout << "[warn] Terminiation in 20s" << endl;
+        
         hrc ts = now();
         auto duration = duration_cast<seconds>(ts-start_ts);
-        if (duration.count()+40 >= end_time) {
+        if (duration.count()+30 >= end_time) {
             return true;
         }
         return false; 
@@ -500,12 +505,15 @@ void hcrr(Timer& timer, HCState cstate, HCSpace& space) {
     while (!timer.check_term()) {
         
         // Find the best successor
-        cout << "cstate number of hplans, hcrr" << cstate.hplans.size() << endl;
+        // cout << "cstate number of hplans, hcrr" << cstate.hplans.size() << endl;
         HCState bs_state = cstate.get_best_successor();
+        
         // Check for a local maximum (no improvement)
         if (cstate.cmp_states(bs_state)) {
             space.add_to_lm(cstate); // Add the local maximum to the best states
+            
             cstate = space.sample(); // Random restart
+            // if (cstate.hplans[0].heli.trips[0].drops[1].v.id != cstate.hplans[0].heli.trips[0].drops[1].village_id) cout << "yes" << endl;
         }
         
         // Check if it's time for a random restart based on interval
@@ -560,12 +568,12 @@ Solution solve(const ProblemData& problem) {
     // Initial Node
     HCState cstate = hcspace.sample();
 
-    cout << "cstate number of hplans, solve" << cstate.hplans.size() << endl;
+    // cout << "cstate number of hplans, solve" << cstate.hplans.size() << endl;
     // start hill climbing with random restarts
     hcrr(timer, cstate, hcspace);
 
     HCState best_sol = hcspace.estimated_global_extrema();
-    cout << best_sol.eval_state() << endl;
+    cout << "score: " << best_sol.eval_state() << endl;
     solution = best_sol.hplans;
     // --- END OF PLACEHOLDER LOGIC ---
 
