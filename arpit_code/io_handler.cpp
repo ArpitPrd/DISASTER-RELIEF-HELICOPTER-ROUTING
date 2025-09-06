@@ -50,6 +50,10 @@ ProblemData readInputData(const string& filename) {
         village_ss >> data.villages[i].coords.x >> data.villages[i].coords.y >> data.villages[i].population;
         data.villages[i].rem_population_other = 9 * data.villages[i].population; //NEW CODE
         data.villages[i].rem_population_other = data.villages[i].population; // NEW CODE
+
+        data.villages[i].pack_received.dry_food = 0;
+        data.villages[i].pack_received.perishable_food = 0;
+        data.villages[i].pack_received.other_supplies = 0;
     }
 
     // Line 6: Helicopters
@@ -74,8 +78,8 @@ void writeOutputData(const string& filename, const Solution& solution) {
     }
 
     for (const auto& plan : solution) {
-        file << plan.helicopter_id << " " << plan.trips.size() << "\n";
-        for (const auto& trip : plan.trips) {
+        file << plan.helicopter_id << " " << plan.heli.trips.size() << "\n";
+        for (const auto& trip : plan.heli.trips) {
             file << trip.dry_food_pickup << " " << trip.perishable_food_pickup << " " << trip.other_supplies_pickup << " " << trip.drops.size();
             for (const auto& drop : trip.drops) {
                 file << " " << drop.village_id << " " << drop.dry_food << " " << drop.perishable_food << " " << drop.other_supplies;
