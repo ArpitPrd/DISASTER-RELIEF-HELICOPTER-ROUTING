@@ -66,7 +66,7 @@ ProblemData readInputData(const string& filename) {
         data.helicopters[i].id = i + 1;
         heli_ss >> data.helicopters[i].home_city_id >> data.helicopters[i].weight_capacity >> data.helicopters[i].distance_capacity >> data.helicopters[i].fixed_cost >> data.helicopters[i].alpha;
         data.helicopters[i].d_max = data.d_max;
-        data.helicopters[i].home_city_coords = data.cities[data.helicopters[i].home_city_id];
+        data.helicopters[i].home_city_coords = data.cities[data.helicopters[i].home_city_id-1];
         data.helicopters[i].trips = {};
     }
 
