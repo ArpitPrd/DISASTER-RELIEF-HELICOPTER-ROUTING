@@ -231,11 +231,11 @@ struct Helicopter {
         return t;
     }
 
-    vector<Trip> try_new_trip(map<int, Village*> vmap) {
+    vector<Trip> try_new_trip(map<int, Village> vmap) {
         vector<Trip> sugg;
-        for (pair<int, Village*> p : vmap) {
+        for (pair<int, Village> p : vmap) {
             vector<Trip> trips_for_h = trips;
-            Trip t = prepare_trip(*p.second);
+            Trip t = prepare_trip(p.second);
             trips_for_h.push_back(t);
 
             if (check_dcap(t) && check_dmax(trips_for_h)) {
@@ -253,10 +253,18 @@ struct Helicopter {
      * 
      * @return vector trips you can get out of only one single trip, then you can use these to wrap them with the orihinal set of of trips but this chamges and make that a child
      */
-    vector<Trip> try_adding_village(int t_idx, map<int, Village*> vmap) { 
+    vector<Trip> try_adding_village(int t_idx, map<int, Village> vmap) { 
         Trip t = trips[t_idx];
         vector<Trip> sug_trips;
         vector<Trip> trip_for_h = trips;
+        // cout << "trips for h" << endl;
+        // for (size_t m_idx =0; m_idx<trip_for_h.size(); m_idx++) {
+        //     for (size_t v_idx=0; v_idx<trip_for_h[m_idx].drops.size(); v_idx++) {
+        //         cout << trip_for_h[m_idx].drops[v_idx].village_id << " ";
+        //     }
+        //     cout << endl;
+        // }
+        // cout << "trips for h over" << endl;
         set<int> vids;
         // cout << "start" << endl;
         for (Drop d: t.drops) {
@@ -264,10 +272,10 @@ struct Helicopter {
             vids.insert(d.village_id);
         }
         // cout << endl;
-        for (pair<int, Village*> p: vmap) {
+        for (pair<int, Village> p: vmap) {
             if (vids.find(p.first)!=vids.end()) continue; // for uniqueness of the villages in a trip
-            Village new_vill = *p.second;
-
+            Village new_vill = p.second;
+            // cout << "new vill " << new_vill.id << endl;
             Trip sug_trip(t);
             Drop new_vil_drop = prepare_drop(new_vill);
             sug_trip.drops.push_back(new_vil_drop);

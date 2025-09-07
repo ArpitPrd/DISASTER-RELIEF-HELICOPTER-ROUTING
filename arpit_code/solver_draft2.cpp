@@ -14,7 +14,7 @@ std::mt19937 gen(rd());
 using hrc = time_point<high_resolution_clock>;
 #define now() high_resolution_clock::now()
 
-map<int, Village*> vmap;
+map<int, Village> vmap;
 
 /**
  * @brief once used information about the packs
@@ -224,7 +224,19 @@ public:
                 
                 // adding a village
                 Trip t = all_trips[t_idx];
+                // for (auto p: vmap){
+                //     cout << "before try add " << p.first << " " << p.second.id << endl;
+                // }
+                // cout << endl;
                 vector<Trip> meta_trips = hplans[h_idx].heli.try_adding_village(t_idx, vmap);
+                // cout << "meta trips" << endl;
+                // for (size_t m_idx =0; m_idx<meta_trips.size(); m_idx++) {
+                //     for (size_t v_idx=0; v_idx<meta_trips[m_idx].drops.size(); v_idx++) {
+                //         cout << meta_trips[m_idx].drops[v_idx].village_id << " ";
+                //     }
+                //     cout << endl;
+                // }
+                // cout << "meta trips over" << endl;
                 // cout << "meta size" << meta_trips.size() << endl;
                 for (Trip sug_trip: meta_trips) {
                     HCState hcs_temp(hplans);
@@ -266,7 +278,11 @@ public:
      */
     HCState get_best_successor() {
         vector<HCState> succs = get_successor();
-    
+        // int n = succs[0].hplans[0].heli.trips[0].drops.size();
+        // for (int i=0; i<n; i++) {
+        //     cout << succs[0].hplans[0].heli.trips[0].drops[i].village_id << " ";
+        // }
+        // cout <<"done" << endl;
         HCState best_hcs = succs[0];
 
         for (HCState succ: succs) {
@@ -388,13 +404,14 @@ public:
     HCState sample() {
         HCState state;
         for (const auto& heli : data.helicopters) {
+            // cout << "heli city id "<< heli.home_city_id << endl;
             HelicopterPlan hplan;
             hplan.heli = heli;
             hplan.helicopter_id = heli.id;
             hplan.helicopter_id = heli.id;
 
             vector<Village> v_in_range = villagesWithinDistance(data.villages, heli.distance_capacity/2, heli.home_city_coords);
-
+            
             shuffle(v_in_range.begin(), v_in_range.end(), gen);
 
             double d_tot = 0;
@@ -468,7 +485,7 @@ public:
         
         hrc ts = now();
         auto duration = duration_cast<seconds>(ts-start_ts);
-        if (duration.count()+30 >= end_time) {
+        if (duration.count()+40 >= end_time) {
             return true;
         }
         return false; 
@@ -508,7 +525,12 @@ void hcrr(Timer& timer, HCState cstate, HCSpace& space) {
         // Find the best successor
         // cout << "cstate number of hplans, hcrr" << cstate.hplans.size() << endl;
         HCState bs_state = cstate.get_best_successor();
-        
+        // cout << "len " << bs_state.hplans[0].heli.trips[0].drops.size() << endl;
+        // for (int i=0; i<2; i++) {
+            
+        //     cout << bs_state.hplans[0].heli.trips[0].drops[i].village_id << " ";
+        // }
+        // cout << endl;
         // Check for a local maximum (no improvement)
         if (cstate.cmp_states(bs_state)) {
             space.add_to_lm(cstate); // Add the local maximum to the best states
@@ -540,8 +562,43 @@ void hcrr(Timer& timer, HCState cstate, HCSpace& space) {
  * @param problem data constructor to the problem
  */
 Solution solve(const ProblemData& problem) {
+    
+    // time limit
+    // cout << problem.time_limit_minutes << endl;
+
+    // dmax
+    // cout << problem.d_max << endl;
+
+    // package info
+    // for (int i=0; i<=2; i++) {
+    //     cout << problem.packages[i].weight << " " << problem.packages[i].value << " ";
+    // }
+    // cout << endl;
+
+    // cities
+    // cout << problem.cities.size() << " ";
+    // for (size_t i=0; i<problem.cities.size(); i++) {
+    //     cout << problem.cities[i].x << " " << problem.cities[i].y << " ";
+    // }
+    // cout << endl;
+
+    // villages
+    // cout << problem.villages.size() << " ";
+    // for (size_t i=0; i<problem.villages.size(); i++) {
+    //     cout << problem.villages[i].coords.x << " " << problem.villages[i].coords.y << " " << problem.villages[i].population << " ";
+    // }
+    // cout << endl;
+
+    // heli
+    // cout << problem.helicopters.size() << " ";
+    // for (size_t i=0; i<problem.helicopters.size(); i++) {
+    //     cout << problem.helicopters[i].home_city_id << " " << problem.helicopters[i].weight_capacity << " " << problem.helicopters[i].distance_capacity << " " << problem.helicopters[i].fixed_cost << " " << problem.helicopters[i].alpha << " ";
+    // }
+    // cout << endl;
+    
     for (Village v: problem.villages) {
-        vmap[v.id] = &v;
+        // cout << "vmap filling " << v.id << endl;
+        vmap[v.id] = v;
     }
 
 
@@ -568,6 +625,18 @@ Solution solve(const ProblemData& problem) {
 
     // Initial Node
     HCState cstate = hcspace.sample();
+
+    // for (size_t i=0; i<cstate.hplans.size(); i++) {
+    //     cout << "hid " << cstate.hplans[i].helicopter_id << endl;
+    //     for (size_t j=0; j<cstate.hplans[i].heli.trips.size(); j++) {
+    //         cout << "trip num " << j+1 << endl;
+    //         for (size_t k=0; k<cstate.hplans[i].heli.trips[j].drops.size(); k++) {
+    //             cout << cstate.hplans[i].heli.trips[j].drops[k].village_id << " ";
+    //         }
+    //         cout << endl;
+    //     }
+    //     cout << "hid over " << cstate.hplans[i].helicopter_id << endl;
+    // }
 
     // cout << "cstate number of hplans, solve" << cstate.hplans.size() << endl;
     // start hill climbing with random restarts
