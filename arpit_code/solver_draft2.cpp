@@ -43,6 +43,8 @@ void assignPackages(Trip &t, double wcap) {
     // cout << "in assign package" << endl;
     vector<Drop> drops = t.drops;
     int w = (int) wcap;
+    cout << "weight capacity = "<<w << endl;
+    exit(1);
     vector<PackageInfo> _packs(packs);
 
     sort(_packs.begin(), _packs.end());
@@ -71,7 +73,7 @@ void assignPackages(Trip &t, double wcap) {
                 // Check global constraint
                 // cout << "packet weihh" << pack.weight << endl;
                 bool global_fits = (total_weight_used + pack.weight) <= w;
-                if (!global_fits) continue; // No need to check local if global fails
+                if (!global_fits) break; // No need to check local if global fails
 
                 // ***MODIFIED: Check the new, specific local constraints***
                 // cout << "wcap" << w << endl;
@@ -93,11 +95,11 @@ void assignPackages(Trip &t, double wcap) {
                     // cout << drops[d_idx].village_id << " " <<  drops[d_idx].dry_food << " " << drops[d_idx].perishable_food << " " << drops[d_idx].other_supplies << endl;
                     total_weight_used += pack.weight;
                     improvement_made = true;
-                    goto next_iteration; // Restart with the best component
+                    //goto next_iteration; // Restart with the best component
                 }
             }
         }
-        next_iteration:;
+        //next_iteration:;
     }
 
     t.dry_food_pickup = 0;
