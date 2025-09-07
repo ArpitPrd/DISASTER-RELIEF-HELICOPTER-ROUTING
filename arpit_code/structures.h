@@ -275,7 +275,7 @@ struct Helicopter {
         for (pair<int, Village> p: vmap) {
             if (vids.find(p.first)!=vids.end()) continue; // for uniqueness of the villages in a trip
             Village new_vill = p.second;
-            cout << "new vill " << new_vill.id << endl;
+            // cout << "new vill " << new_vill.id << endl;
             Trip sug_trip(t);
             Drop new_vil_drop = prepare_drop(new_vill);
             sug_trip.drops.push_back(new_vil_drop);

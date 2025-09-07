@@ -224,19 +224,19 @@ public:
                 
                 // adding a village
                 Trip t = all_trips[t_idx];
-                for (auto p: vmap){
-                    cout << "before try add " << p.first << " " << p.second.id << endl;
-                }
-                cout << endl;
+                // for (auto p: vmap){
+                //     cout << "before try add " << p.first << " " << p.second.id << endl;
+                // }
+                // cout << endl;
                 vector<Trip> meta_trips = hplans[h_idx].heli.try_adding_village(t_idx, vmap);
-                cout << "meta trips" << endl;
-                for (size_t m_idx =0; m_idx<meta_trips.size(); m_idx++) {
-                    for (size_t v_idx=0; v_idx<meta_trips[m_idx].drops.size(); v_idx++) {
-                        cout << meta_trips[m_idx].drops[v_idx].village_id << " ";
-                    }
-                    cout << endl;
-                }
-                cout << "meta trips over" << endl;
+                // cout << "meta trips" << endl;
+                // for (size_t m_idx =0; m_idx<meta_trips.size(); m_idx++) {
+                //     for (size_t v_idx=0; v_idx<meta_trips[m_idx].drops.size(); v_idx++) {
+                //         cout << meta_trips[m_idx].drops[v_idx].village_id << " ";
+                //     }
+                //     cout << endl;
+                // }
+                // cout << "meta trips over" << endl;
                 // cout << "meta size" << meta_trips.size() << endl;
                 for (Trip sug_trip: meta_trips) {
                     HCState hcs_temp(hplans);
@@ -484,7 +484,7 @@ public:
         
         hrc ts = now();
         auto duration = duration_cast<seconds>(ts-start_ts);
-        if (duration.count()+59.99 >= end_time) {
+        if (duration.count()+40 >= end_time) {
             return true;
         }
         return false; 
@@ -563,40 +563,40 @@ void hcrr(Timer& timer, HCState cstate, HCSpace& space) {
 Solution solve(const ProblemData& problem) {
     
     // time limit
-    cout << problem.time_limit_minutes << endl;
+    // cout << problem.time_limit_minutes << endl;
 
     // dmax
-    cout << problem.d_max << endl;
+    // cout << problem.d_max << endl;
 
     // package info
-    for (int i=0; i<=2; i++) {
-        cout << problem.packages[i].weight << " " << problem.packages[i].value << " ";
-    }
-    cout << endl;
+    // for (int i=0; i<=2; i++) {
+    //     cout << problem.packages[i].weight << " " << problem.packages[i].value << " ";
+    // }
+    // cout << endl;
 
     // cities
-    cout << problem.cities.size() << " ";
-    for (size_t i=0; i<problem.cities.size(); i++) {
-        cout << problem.cities[i].x << " " << problem.cities[i].y << " ";
-    }
-    cout << endl;
+    // cout << problem.cities.size() << " ";
+    // for (size_t i=0; i<problem.cities.size(); i++) {
+    //     cout << problem.cities[i].x << " " << problem.cities[i].y << " ";
+    // }
+    // cout << endl;
 
     // villages
-    cout << problem.villages.size() << " ";
-    for (size_t i=0; i<problem.villages.size(); i++) {
-        cout << problem.villages[i].coords.x << " " << problem.villages[i].coords.y << " " << problem.villages[i].population << " ";
-    }
-    cout << endl;
+    // cout << problem.villages.size() << " ";
+    // for (size_t i=0; i<problem.villages.size(); i++) {
+    //     cout << problem.villages[i].coords.x << " " << problem.villages[i].coords.y << " " << problem.villages[i].population << " ";
+    // }
+    // cout << endl;
 
     // heli
-    cout << problem.helicopters.size() << " ";
-    for (size_t i=0; i<problem.helicopters.size(); i++) {
-        cout << problem.helicopters[i].home_city_id << " " << problem.helicopters[i].weight_capacity << " " << problem.helicopters[i].distance_capacity << " " << problem.helicopters[i].fixed_cost << " " << problem.helicopters[i].alpha << " ";
-    }
-    cout << endl;
+    // cout << problem.helicopters.size() << " ";
+    // for (size_t i=0; i<problem.helicopters.size(); i++) {
+    //     cout << problem.helicopters[i].home_city_id << " " << problem.helicopters[i].weight_capacity << " " << problem.helicopters[i].distance_capacity << " " << problem.helicopters[i].fixed_cost << " " << problem.helicopters[i].alpha << " ";
+    // }
+    // cout << endl;
     
     for (Village v: problem.villages) {
-        cout << "vmap filling " << v.id << endl;
+        // cout << "vmap filling " << v.id << endl;
         vmap[v.id] = v;
     }
 
