@@ -15,7 +15,7 @@ using hrc = time_point<high_resolution_clock>;
 #define now() high_resolution_clock::now()
 
 map<int, Village> vmap;
-
+int ascnt;
 /**
  * @brief once used information about the packs
  * 
@@ -23,6 +23,96 @@ map<int, Village> vmap;
  * @param value value
  */
 vector<PackageInfo> packs;
+
+
+class TripState {
+public:
+    vector<Drop> drops;
+    double wcap;
+    double weight;
+    TripState(vector<Drop> drops, double wcap, double weight) {
+        this->drops = drops;
+        this->wcap = wcap;
+        this->weight = weight;
+    }
+
+    vector<TripState> get_successor() {
+        vector<TripState> succs;
+        for (size_t d_idx=0; d_idx<drops.size(); d_idx++) {
+            for (PackageInfo pack: packs) {
+                if (weight + pack.weight<=wcap) {
+                    TripState ts(drops, wcap, weight + pack.weight);
+                    if (pack.id==0) ts.drops[d_idx].dry_food++;
+                    if (pack.id==1) ts.drops[d_idx].perishable_food++;
+                    if (pack.id==2) ts.drops[d_idx].other_supplies++;
+                    succs.push_back(ts);
+                }
+
+                if ((weight-pack.weight>=0) ){
+                    TripState ts(drops, wcap, weight - pack.weight);
+                    if (pack.id==0 && (ts.drops[d_idx].dry_food>0)) ts.drops[d_idx].dry_food--;
+                    if (pack.id==1 && (ts.drops[d_idx].perishable_food>0)) ts.drops[d_idx].perishable_food--;
+                    if (pack.id==2 && (ts.drops[d_idx].other_supplies>0)) ts.drops[d_idx].other_supplies--;
+                    succs.push_back(ts);
+                }
+                
+            }
+        }
+        return succs;
+    }
+
+    double eval_state() {
+        double value = 0;
+        for (Drop &d: drops) {
+            value += d.dry_food * packs[0].value + d.other_supplies * packs[2].value + d.perishable_food * packs[1].value;
+        }
+        return value;
+    }
+
+    TripState get_best_successor() {
+        vector<TripState> succs = get_successor();
+
+        TripState best_succ = succs[0];
+        for (TripState succ: succs) {
+            if (succ.eval_state() >= best_succ.eval_state()) {
+                best_succ = succ;
+            }
+        }
+
+        return best_succ;
+    }
+};
+
+TripState hcrr_sub(TripState currts) {
+    TripState best = currts.get_best_successor();
+
+    if (currts.eval_state() >= best.eval_state()) {
+        return currts;
+    }
+
+    return hcrr_sub(best);
+}
+
+void assignPackages2(Trip &t, double wcap) {
+    for (Drop &d: t.drops) {
+        d.dry_food = 0;
+        d.other_supplies = 0;
+        d.perishable_food = 0;
+    }
+    TripState ts(t.drops, wcap, 0);
+    TripState best = hcrr_sub(ts);
+    t.drops = best.drops;
+
+    t.dry_food_pickup = 0;
+    t.other_supplies_pickup= 0;
+    t.perishable_food_pickup = 0;
+    for (Drop &d: t.drops) {
+        t.dry_food_pickup += d.dry_food;
+        t.perishable_food_pickup += d.perishable_food;
+        t.other_supplies_pickup += d.other_supplies;
+    }
+}
+
 
 /**
  * @brief assigns packages by optimising the following
@@ -43,16 +133,15 @@ void assignPackages(Trip &t, double wcap) {
     // cout << "in assign package" << endl;
     vector<Drop> drops = t.drops;
     int w = (int) wcap;
-    cout << "weight capacity = "<<w << endl;
-    exit(1);
+    //cout << "weight capacity = "<<w << endl;
     vector<PackageInfo> _packs(packs);
 
     sort(_packs.begin(), _packs.end());
 
-    long long total_weight_used = 0;
+    double total_weight_used = 0;
 
     vector<int> pops;
-    for (Drop d: drops) {
+    for (Drop &d: drops) {
         // cout << "village id" << d.v.id << " " << d.village_id <<  endl;
         pops.push_back(d.v.population);
         // need to reset values of the drop ??
@@ -94,24 +183,28 @@ void assignPackages(Trip &t, double wcap) {
                     else drops[d_idx].other_supplies+=1;
                     // cout << drops[d_idx].village_id << " " <<  drops[d_idx].dry_food << " " << drops[d_idx].perishable_food << " " << drops[d_idx].other_supplies << endl;
                     total_weight_used += pack.weight;
+                    // cout << pack.id << " " << pack.weight << endl;
+                    // cout << total_weight_used << endl;
                     improvement_made = true;
-                    //goto next_iteration; // Restart with the best component
+                    goto next_iteration; // Restart with the best component
                 }
             }
         }
-        //next_iteration:;
+        next_iteration:;
     }
 
     t.dry_food_pickup = 0;
     t.perishable_food_pickup = 0;
     t.other_supplies_pickup = 0;
-    for (Drop drop: drops) {
+    for (Drop &drop: drops) {
         t.dry_food_pickup += drop.dry_food;
         t.perishable_food_pickup += drop.perishable_food;
         t.other_supplies_pickup += drop.other_supplies;
     }
 
     t.drops = drops;
+    ascnt += 1;
+    // if (ascnt==2) exit(1);
     // cout << "exit assign package" << endl;
     return;
  }
@@ -226,7 +319,7 @@ public:
         vector<HCState> succ;
         for (size_t h_idx = 0; h_idx < hplans.size(); h_idx++) {
             vector<Trip> all_trips = hplans[h_idx].heli.trips;
-            if(all_trips.size() == 0) {continue;}
+            // if(all_trips.size() == 0) {continue;}
             vector<bool> trip_size_one(all_trips.size());
             // cout << "all trips size, get_successor" << all_trips.size() << endl;
             for (size_t t_idx = 0; t_idx <  all_trips.size(); t_idx++) {
@@ -249,7 +342,11 @@ public:
                 // cout << "meta size" << meta_trips.size() << endl;
                 for (Trip sug_trip: meta_trips) {
                     HCState hcs_temp(hplans);
-                    assignPackages(sug_trip, hplans[h_idx].heli.weight_capacity);
+                    assignPackages2(sug_trip, hplans[h_idx].heli.weight_capacity);
+                    cout << "Hid " << hplans[h_idx].helicopter_id << endl;
+                    for (Drop d_test: sug_trip.drops) {
+                        cout << d_test.dry_food << " " << d_test.perishable_food << " " << d_test.other_supplies << endl;
+                    }
                     hcs_temp.hplans[h_idx].heli.trips[t_idx] = sug_trip;
                     succ.push_back(hcs_temp);
                 }
@@ -257,7 +354,7 @@ public:
                 Trip rem_vill = hplans[h_idx].heli.try_removing_village(t_idx, vmap);
                 if(rem_vill.drops.size() != 0){
                     HCState hcs_temp(hplans);
-                    assignPackages(rem_vill, hplans[h_idx].heli.weight_capacity);
+                    assignPackages2(rem_vill, hplans[h_idx].heli.weight_capacity);
                     hcs_temp.hplans[h_idx].heli.trips[t_idx] = rem_vill;
                     succ.push_back(hcs_temp);
                 }
@@ -271,7 +368,7 @@ public:
 
             for (Trip sug_trip: one_village_trips) {
                 HCState hcs_temp(hplans);
-                assignPackages(sug_trip, hplans[h_idx].heli.weight_capacity);
+                assignPackages2(sug_trip, hplans[h_idx].heli.weight_capacity);
                 hcs_temp.hplans[h_idx].heli.trips.push_back(sug_trip);
                 succ.push_back(hcs_temp);
             }
@@ -312,12 +409,13 @@ public:
     HCState get_best_successor() {
         vector<HCState> succs = get_successor();
         // int n = succs[0].hplans[0].heli.trips[0].drops.size();
-        // for (int i=0; i<n; i++) {
-        //     cout << succs[0].hplans[0].heli.trips[0].drops[i].village_id << " ";
-        // }
+        // for (int i=0; i <)
+        //     for (int i=0; i<n; i++) {
+        //         cout << succs[0].hplans[0].heli.trips[0].drops[i].village_id << " ";
+        //     }
         // cout <<"done" << endl;
         if(succs.size() == 0){
-
+            
         }
         HCState best_hcs = succs[0];
 
@@ -632,7 +730,7 @@ Solution solve(const ProblemData& problem) {
     //     cout << problem.helicopters[i].home_city_id << " " << problem.helicopters[i].weight_capacity << " " << problem.helicopters[i].distance_capacity << " " << problem.helicopters[i].fixed_cost << " " << problem.helicopters[i].alpha << " ";
     // }
     // cout << endl;
-    
+    ascnt = 0;
     for (Village v: problem.villages) {
         // cout << "vmap filling " << v.id << endl;
         vmap[v.id] = v;
