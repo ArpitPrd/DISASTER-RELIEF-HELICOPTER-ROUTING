@@ -348,7 +348,7 @@ public:
     ) {
         std::vector<Village> result;
         for (const auto& v : villages) {
-            if (2 * distance(v.coords, p) <= dcap) {
+            if (distance(v.coords, p) <= dcap) {
                 result.push_back(v);
             }
         }
@@ -416,12 +416,13 @@ public:
 
             double d_tot = 0;
             for (Village v_pros: v_in_range) {
-                d_tot += 2 * distance(v_pros.coords, heli.home_city_coords);
+                d_tot += distance(v_pros.coords, heli.home_city_coords);
                 // cout << d_tot << " " << heli.d_max << endl;
                 if (d_tot <= heli.d_max) {
                     Trip t = prepare_trip(v_pros);
                     
                     hplan.heli.trips = {t};
+                    break;
                 }
             }
 
