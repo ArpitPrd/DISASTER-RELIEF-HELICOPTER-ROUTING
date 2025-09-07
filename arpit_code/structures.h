@@ -289,6 +289,16 @@ struct Helicopter {
 
         return sug_trips;
     }
+
+
+    Trip try_removing_village(int t_idx, map<int, Village> vmap){
+        Trip t = trips[t_idx];
+        vector<Trip> trip_for_h = trips;
+        Trip sug_trip = t;
+        sug_trip.drops.pop_back();
+        return sug_trip;
+    }
+
 };
 
 struct ProblemData {

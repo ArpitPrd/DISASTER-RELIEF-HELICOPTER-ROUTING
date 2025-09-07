@@ -53,6 +53,11 @@ void assignPackages(Trip &t, double wcap) {
     for (Drop d: drops) {
         // cout << "village id" << d.v.id << " " << d.village_id <<  endl;
         pops.push_back(d.v.population);
+        // need to reset values of the drop ??
+        d.dry_food = 0;
+        d.perishable_food = 0;
+        d.other_supplies = 0;
+
     }
     bool improvement_made = true;
     while (improvement_made) {
@@ -215,10 +220,12 @@ public:
      * @return a vector of HCState that are my children
      */
     vector<HCState> get_successor() {
-
+        //cout << "Reached" << endl;
         vector<HCState> succ;
         for (size_t h_idx = 0; h_idx < hplans.size(); h_idx++) {
             vector<Trip> all_trips = hplans[h_idx].heli.trips;
+            if(all_trips.size() == 0) {continue;}
+            vector<bool> trip_size_one(all_trips.size());
             // cout << "all trips size, get_successor" << all_trips.size() << endl;
             for (size_t t_idx = 0; t_idx <  all_trips.size(); t_idx++) {
                 
@@ -244,6 +251,18 @@ public:
                     hcs_temp.hplans[h_idx].heli.trips[t_idx] = sug_trip;
                     succ.push_back(hcs_temp);
                 }
+
+                Trip rem_vill = hplans[h_idx].heli.try_removing_village(t_idx, vmap);
+                if(rem_vill.drops.size() != 0){
+                    HCState hcs_temp(hplans);
+                    assignPackages(rem_vill, hplans[h_idx].heli.weight_capacity);
+                    hcs_temp.hplans[h_idx].heli.trips[t_idx] = rem_vill;
+                    succ.push_back(hcs_temp);
+                }
+                else{
+                    trip_size_one[t_idx] = true;
+                }
+ 
             }
 
             vector<Trip> one_village_trips = hplans[h_idx].heli.try_new_trip(vmap);
@@ -253,6 +272,18 @@ public:
                 assignPackages(sug_trip, hplans[h_idx].heli.weight_capacity);
                 hcs_temp.hplans[h_idx].heli.trips.push_back(sug_trip);
                 succ.push_back(hcs_temp);
+            }
+
+            for (size_t t_idx = 0; t_idx < all_trips.size(); t_idx++){
+                Trip t = all_trips[t_idx];
+                if(trip_size_one[t_idx]){
+                    HCState hcs_temp(hplans);
+                    all_trips.erase(all_trips.begin() + t_idx);
+                    hcs_temp.hplans[h_idx].heli.trips = all_trips;
+                    succ.push_back(hcs_temp);
+                    all_trips.insert(all_trips.begin() + t_idx, t);
+
+                }
             }
         }
         return succ;
@@ -283,6 +314,9 @@ public:
         //     cout << succs[0].hplans[0].heli.trips[0].drops[i].village_id << " ";
         // }
         // cout <<"done" << endl;
+        if(succs.size() == 0){
+
+        }
         HCState best_hcs = succs[0];
 
         for (HCState succ: succs) {
@@ -486,7 +520,7 @@ public:
         
         hrc ts = now();
         auto duration = duration_cast<seconds>(ts-start_ts);
-        if (duration.count()+40 >= end_time) {
+        if (duration.count() + 40>= end_time) {
             return true;
         }
         return false; 
