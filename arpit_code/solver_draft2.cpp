@@ -15,7 +15,7 @@ using hrc = time_point<high_resolution_clock>;
 #define now() high_resolution_clock::now()
 
 map<int, Village> vmap;
-int ascnt;
+int ascnt = 0;
 /**
  * @brief once used information about the packs
  * 
@@ -30,7 +30,7 @@ public:
     vector<Drop> drops;
     double wcap;
     double weight;
-    TripState(vector<Drop> drops, double wcap, double weight) {
+    TripState(vector<Drop> &drops, double wcap, double weight) {
         this->drops = drops;
         this->wcap = wcap;
         this->weight = weight;
@@ -40,8 +40,9 @@ public:
         vector<TripState> succs;
         for (size_t d_idx=0; d_idx<drops.size(); d_idx++) {
             for (PackageInfo pack: packs) {
-                if (weight + pack.weight<=wcap) {
-                    TripState ts(drops, wcap, weight + pack.weight);
+                if (weight + pack.weight <= wcap) {
+                    TripState ts = *this;
+                    ts.weight += pack.weight;
                     if (pack.id==0) ts.drops[d_idx].dry_food++;
                     if (pack.id==1) ts.drops[d_idx].perishable_food++;
                     if (pack.id==2) ts.drops[d_idx].other_supplies++;
@@ -49,15 +50,25 @@ public:
                 }
 
                 if ((weight-pack.weight>=0) ){
-                    TripState ts(drops, wcap, weight - pack.weight);
-                    if (pack.id==0 && (ts.drops[d_idx].dry_food>0)) ts.drops[d_idx].dry_food--;
-                    if (pack.id==1 && (ts.drops[d_idx].perishable_food>0)) ts.drops[d_idx].perishable_food--;
-                    if (pack.id==2 && (ts.drops[d_idx].other_supplies>0)) ts.drops[d_idx].other_supplies--;
-                    succs.push_back(ts);
+                    TripState ts = *this;
+                    ts.weight -= pack.weight;
+                    if (pack.id==0 && (ts.drops[d_idx].dry_food>0)){
+                        ts.drops[d_idx].dry_food--;
+                        succs.push_back(ts);
+                    } 
+                    if (pack.id==1 && (ts.drops[d_idx].perishable_food>0)){
+                        ts.drops[d_idx].perishable_food--;
+                        succs.push_back(ts);
+                    } 
+                    if (pack.id==2 && (ts.drops[d_idx].other_supplies>0)){
+                        ts.drops[d_idx].other_supplies--;
+                        succs.push_back(ts);
+                    }
+                    
                 }
-                
             }
         }
+        
         return succs;
     }
 
@@ -71,8 +82,10 @@ public:
 
     TripState get_best_successor() {
         vector<TripState> succs = get_successor();
-
+        //cout << "yes" << endl;
+        
         TripState best_succ = succs[0];
+        
         for (TripState succ: succs) {
             if (succ.eval_state() >= best_succ.eval_state()) {
                 best_succ = succ;
@@ -81,16 +94,80 @@ public:
 
         return best_succ;
     }
+
 };
 
-TripState hcrr_sub(TripState currts) {
-    TripState best = currts.get_best_successor();
+TripState sampler(vector<Drop> drops, double wcap){
+    for (Drop &d : drops)
+    {
+        d.dry_food = 0;
+        d.other_supplies = 0;
+        d.perishable_food = 0;
+    }
+    TripState ts(drops, wcap, 0);
+    vector<double> pack_density;
+    for (const auto &pack : packs)
+    {
+        if (pack.weight > 0)
+        {
+            pack_density.push_back(pack.density);
+        }
+        else
+        {
+            pack_density.push_back(1e9); 
+        }
+    }
+    discrete_distribution<> pack_dist(pack_density.begin(), pack_density.end());
+    // uniform_int_distribution<> drop_dist(0, ts.drops.size() - 1);
 
-    if (currts.eval_state() >= best.eval_state()) {
+    for(size_t d_idx = 0; d_idx < ts.drops.size(); d_idx++){
+        int pack_idx = pack_dist(gen);
+        const PackageInfo &pack = packs[pack_idx];
+
+        int population = ts.drops[d_idx].v.population;
+        int max_items = 0;
+        if(pack_idx == 0 || pack_idx == 1){
+            max_items = min(9*population, int((wcap-ts.weight)/pack.weight));
+        }
+        else{
+            max_items = min(population, int((wcap - ts.weight) / pack.weight));
+        }
+        if(max_items <= 0){
+            break;
+        }
+
+        uniform_int_distribution<> distribution(0, max_items);
+        int assigned_items = distribution(gen);
+        ts.weight += assigned_items*pack.weight;
+        if(pack_idx == 0){
+            ts.drops[d_idx].dry_food += assigned_items;
+        }
+        if(pack_idx == 1){
+            ts.drops[d_idx].perishable_food += assigned_items;
+        }
+        if(pack_idx == 2){
+            ts.drops[d_idx].other_supplies += assigned_items;
+        }
+    }
+
+    return ts;
+}
+
+TripState hcrr_sub(TripState currts, int depth = 0, int max_depth = 1000)
+{
+    if (depth >= max_depth)
+    {
         return currts;
     }
 
-    return hcrr_sub(best);
+    TripState best = currts.get_best_successor();
+
+    if (currts.eval_state() >= best.eval_state())
+    {
+        return currts;
+    }
+
+    return hcrr_sub(best, depth + 1, max_depth);
 }
 
 void assignPackages2(Trip &t, double wcap) {
@@ -99,7 +176,7 @@ void assignPackages2(Trip &t, double wcap) {
         d.other_supplies = 0;
         d.perishable_food = 0;
     }
-    TripState ts(t.drops, wcap, 0);
+    TripState ts = sampler(t.drops, wcap);
     TripState best = hcrr_sub(ts);
     t.drops = best.drops;
 
@@ -112,6 +189,7 @@ void assignPackages2(Trip &t, double wcap) {
         t.other_supplies_pickup += d.other_supplies;
     }
 }
+
 
 
 /**
@@ -203,7 +281,7 @@ void assignPackages(Trip &t, double wcap) {
     }
 
     t.drops = drops;
-    ascnt += 1;
+    
     // if (ascnt==2) exit(1);
     // cout << "exit assign package" << endl;
     return;
@@ -250,36 +328,61 @@ public:
      */
     double state_value() {
         map<int, Village> vil_map;
-
+        vector<double> food_delivered(vmap.size() + 1, 0.0);
+        vector<double> other_delivered(vmap.size() + 1, 0.0);
+        vector<double> village_values(vmap.size() + 1, 0.0);
         for (HelicopterPlan hp: hplans) {
             for (Trip t: hp.heli.trips) {
                 for (Drop d: t.drops) {
-                    
+                    int village_id = d.village_id;
+                    int vp = d.perishable_food;
+                    int vd = d.dry_food;
+                    int vo = d.other_supplies;
+                    Village village = vmap[d.village_id];
                     // if village found for the first time
                     
-                    if (vil_map.find(d.village_id)==vil_map.end()) {
-                        vil_map[d.village_id] = Village(d.v);
-                        vil_map[d.village_id].pack_received.dry_food = d.dry_food;
-                        vil_map[d.village_id].pack_received.perishable_food = d.perishable_food;
-                        vil_map[d.village_id].pack_received.other_supplies = d.other_supplies;
-                    }
+                    // if (vil_map.find(d.village_id)==vil_map.end()) {
+                    //     vil_map[d.village_id] = Village(d.v);
+                    //     vil_map[d.village_id].pack_received.dry_food = d.dry_food;
+                    //     vil_map[d.village_id].pack_received.perishable_food = d.perishable_food;
+                    //     vil_map[d.village_id].pack_received.other_supplies = d.other_supplies;
+                    // }
 
-                    // if already exists
-                    else {
-                        vil_map[d.village_id].pack_received.dry_food += d.dry_food;
-                        vil_map[d.village_id].pack_received.perishable_food += d.perishable_food;
-                        vil_map[d.village_id].pack_received.other_supplies += d.other_supplies;
-                    }
+                    // // if already exists
+                    // else {
+                    //     vil_map[d.village_id].pack_received.dry_food += d.dry_food;
+                    //     vil_map[d.village_id].pack_received.perishable_food += d.perishable_food;
+                    //     vil_map[d.village_id].pack_received.other_supplies += d.other_supplies;
+                    // }
 
+                    double max_food_needed = village.population * 9.0;
+                    double food_room_left = max(0.0, max_food_needed - food_delivered[village_id]);
+                    double food_in_this_drop = vd + vp;
+                    double effective_food_this_drop = min(food_in_this_drop, food_room_left);
+                    double effective_vp = min((double)vp, effective_food_this_drop);
+                    double value_from_p = effective_vp * packs[1].value;
+                    double remaining_effective_food = effective_food_this_drop - effective_vp;
+                    double effective_vd = min((double)vd, remaining_effective_food);
+                    double value_from_d = effective_vd * packs[0].value;
+                    village_values[village_id] += value_from_p + value_from_d;
+
+                    double max_other_needed = village.population * 1.0;
+                    double other_room_left = max(0.0, max_other_needed - other_delivered[village_id]);
+                    double effective_vo = min((double)vo, other_room_left);
+                    village_values[village_id] += effective_vo * packs[2].value;
+
+                    food_delivered[village_id] += food_in_this_drop;
+                    other_delivered[village_id] += vo;
                 }
             }
         }
 
         // now eval for each villages
-        double value = 0;
-        for (pair<int, Village> p: vil_map) {
-            value += p.second.value_receieved(packs);
-        }
+        // double value = 0;
+        // for (pair<int, Village> p: vil_map) {
+        //     value += p.second.value_receieved(packs);
+        // }
+        double value = accumulate(village_values.begin(), village_values.end(), 0.0);
 
         return value;
     }
@@ -294,7 +397,6 @@ public:
         for (HelicopterPlan hp: hplans) {
             cost += hp.heli.trips_cost(hp.heli.trips);
         }
-
         return cost;
     }
 
@@ -304,6 +406,10 @@ public:
      * @return the objective function of my state
      */
     double eval_state() {
+        double sv = state_value();
+        double sc = state_cost(); 
+        cout << "State Value : " << sv << endl;
+        cout << "State Cost : " << sc << endl;
         return state_value() - state_cost();
     }
     

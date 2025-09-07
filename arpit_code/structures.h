@@ -71,12 +71,8 @@ struct Village {
 
         int food_needed = population * 9;
         value += min(pack_received.perishable_food, food_needed) * packs[1].value;
-
-        if (pack_received.perishable_food >= food_needed) return value;
-        int rem =  food_needed - pack_received.perishable_food;
-        value += min(rem, pack_received.dry_food) * packs[0].value;
-
-        if (pack_received.dry_food >= 9*rem) return value;
+        food_needed = food_needed - min(pack_received.perishable_food, food_needed);
+        value += min(food_needed, pack_received.dry_food) * packs[0].value;
 
         value += min(population, pack_received.other_supplies) * packs[2].value;
 
