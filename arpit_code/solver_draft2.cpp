@@ -726,7 +726,7 @@ public:
         
         hrc ts = now();
         auto duration = duration_cast<seconds>(ts-start_ts);
-        if (duration.count() + 40>= end_time) {
+        if (duration.count() + 2>= end_time) {
             return true;
         }
         return false; 
