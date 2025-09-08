@@ -2,7 +2,7 @@
 #define STRUCTURES_H
 
 #include <vector>
-#include <cmath> // For sqrt and pow
+#include <cmath> 
 #include <set>
 #include <map>
 #include <iostream>
@@ -53,32 +53,6 @@ struct Village {
     int id;
     Point coords;
     int population;
-    int rem_population_food;
-    Packages pack_received;
-    int rem_population_other;  // added people remaining to be served
-
-    /**
-     * @brief call this function at any instant and it will tell the value added to this 
-     * 
-     * @param packs give out the packet information here, make sure ordering is maintained
-     * @return the value added to this village only when pack_received is filled
-     * @note gives priority to perishables , then dry then others
-     * 
-     * @note make sure pack_received is populated correctly before using this fucntion
-     */
-    // double value_receieved(vector<PackageInfo> packs) {
-    //     double value = 0;
-
-    //     int food_needed = population * 9;
-    //     value += min(pack_received.perishable_food, food_needed) * packs[1].value;
-    //     food_needed = food_needed - min(pack_received.perishable_food, food_needed);
-    //     value += min(food_needed, pack_received.dry_food) * packs[0].value;
-
-    //     value += min(population, pack_received.other_supplies) * packs[2].value;
-
-    //     return value;
-        
-    // }
 
 };
 struct Drop {
@@ -253,31 +227,22 @@ struct Helicopter {
         Trip t = trips[t_idx];
         vector<Trip> sug_trips;
         vector<Trip> trip_for_h = trips;
-        // cout << "trips for h" << endl;
-        // for (size_t m_idx =0; m_idx<trip_for_h.size(); m_idx++) {
-        //     for (size_t v_idx=0; v_idx<trip_for_h[m_idx].drops.size(); v_idx++) {
-        //         cout << trip_for_h[m_idx].drops[v_idx].village_id << " ";
-        //     }
-        //     cout << endl;
-        // }
-        // cout << "trips for h over" << endl;
         set<int> vids;
-        // cout << "start" << endl;
+    
         for (Drop d: t.drops) {
-            // cout << "try adding "<< d.village_id << " " << d.v.id << endl;
             vids.insert(d.village_id);
         }
         // cout << endl;
         for (pair<int, Village> p: vmap) {
             if (vids.find(p.first)!=vids.end()) continue; // for uniqueness of the villages in a trip
             Village new_vill = p.second;
-            // cout << "new vill " << new_vill.id << endl;
+            
             Trip sug_trip(t);
             Drop new_vil_drop = prepare_drop(new_vill);
             sug_trip.drops.push_back(new_vil_drop);
 
             trip_for_h[t_idx] = sug_trip;
-            // perform check
+            
             if (check_dcap(sug_trip) && check_dmax(trip_for_h)) {
                 sug_trips.push_back(sug_trip);
             }

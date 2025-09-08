@@ -48,12 +48,6 @@ ProblemData readInputData(const string& filename) {
     for (int i = 0; i < num_villages; ++i) {
         data.villages[i].id = i + 1;
         village_ss >> data.villages[i].coords.x >> data.villages[i].coords.y >> data.villages[i].population;
-        data.villages[i].rem_population_other = 9 * data.villages[i].population; //NEW CODE
-        data.villages[i].rem_population_other = data.villages[i].population; // NEW CODE
-
-        data.villages[i].pack_received.dry_food = 0;
-        data.villages[i].pack_received.perishable_food = 0;
-        data.villages[i].pack_received.other_supplies = 0;
     }
 
     // Line 6: Helicopters

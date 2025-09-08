@@ -7,7 +7,7 @@ EXEC = main
 CHECKER_EXEC = format_checker
 
 # Source files for the main solver
-SRCS = main.cpp io_handler.cpp solver_draft2.cpp
+SRCS = main.cpp io_handler.cpp solver.cpp
 
 # Source file for the checker
 CHECKER_SRCS = format_checker.cpp
@@ -38,6 +38,6 @@ $(CHECKER_EXEC): $(CHECKER_OBJS) io_handler.o
 
 # Clean up build files
 clean:
-	del -f $(EXEC) $(CHECKER_EXEC) $(OBJS) $(CHECKER_OBJS)
+	rm -f $(EXEC) $(CHECKER_EXEC) $(OBJS) $(CHECKER_OBJS)
 
 .PHONY: all clean checker
