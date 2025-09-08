@@ -66,19 +66,19 @@ struct Village {
      * 
      * @note make sure pack_received is populated correctly before using this fucntion
      */
-    double value_receieved(vector<PackageInfo> packs) {
-        double value = 0;
+    // double value_receieved(vector<PackageInfo> packs) {
+    //     double value = 0;
 
-        int food_needed = population * 9;
-        value += min(pack_received.perishable_food, food_needed) * packs[1].value;
-        food_needed = food_needed - min(pack_received.perishable_food, food_needed);
-        value += min(food_needed, pack_received.dry_food) * packs[0].value;
+    //     int food_needed = population * 9;
+    //     value += min(pack_received.perishable_food, food_needed) * packs[1].value;
+    //     food_needed = food_needed - min(pack_received.perishable_food, food_needed);
+    //     value += min(food_needed, pack_received.dry_food) * packs[0].value;
 
-        value += min(population, pack_received.other_supplies) * packs[2].value;
+    //     value += min(population, pack_received.other_supplies) * packs[2].value;
 
-        return value;
+    //     return value;
         
-    }
+    // }
 
 };
 struct Drop {

@@ -30,7 +30,7 @@ public:
     vector<Drop> drops;
     double wcap;
     double weight;
-    TripState(vector<Drop> &drops, double wcap, double weight) {
+    TripState(vector<Drop> drops, double wcap, double weight) {
         this->drops = drops;
         this->wcap = wcap;
         this->weight = weight;
@@ -41,11 +41,19 @@ public:
         for (size_t d_idx=0; d_idx<drops.size(); d_idx++) {
             for (PackageInfo pack: packs) {
                 if (weight + pack.weight <= wcap) {
-                    TripState ts = *this;
+                    TripState ts(this->drops, this->wcap, this->weight);
                     ts.weight += pack.weight;
                     if (pack.id==0) ts.drops[d_idx].dry_food++;
                     if (pack.id==1) ts.drops[d_idx].perishable_food++;
                     if (pack.id==2) ts.drops[d_idx].other_supplies++;
+                    cout << "_______" << endl;
+                    for (Drop d:ts.drops) {
+                        cout << "reached" << endl;
+                        cout << d.dry_food << endl;
+                    }
+                    cout << ts.wcap << endl;
+                    cout << ts.weight << endl;
+                    cout << "--------" << endl;
                     succs.push_back(ts);
                 }
 
@@ -74,7 +82,7 @@ public:
 
     double eval_state() {
         double value = 0;
-        for (Drop &d: drops) {
+        for (Drop d: drops) {
             value += d.dry_food * packs[0].value + d.other_supplies * packs[2].value + d.perishable_food * packs[1].value;
         }
         return value;
@@ -106,7 +114,7 @@ TripState sampler(vector<Drop> drops, double wcap){
     }
     TripState ts(drops, wcap, 0);
     vector<double> pack_density;
-    for (const auto &pack : packs)
+    for (const auto pack : packs)
     {
         if (pack.weight > 0)
         {
@@ -153,21 +161,37 @@ TripState sampler(vector<Drop> drops, double wcap){
     return ts;
 }
 
-TripState hcrr_sub(TripState currts, int depth = 0, int max_depth = 1000)
+TripState hcrr_sub(TripState currts, TripState global_state, int rem_restarts, int depth = 0, int max_depth = 1000)
 {
     if (depth >= max_depth)
     {
-        return currts;
+        if(rem_restarts > 0){
+            TripState ts = sampler(currts.drops, currts.wcap);
+            return hcrr_sub(ts, global_state, rem_restarts - 1, 0, max_depth);
+        }
+        return global_state;
     }
 
     TripState best = currts.get_best_successor();
 
     if (currts.eval_state() >= best.eval_state())
     {
+        if(global_state.eval_state() <= currts.eval_state()){
+            global_state = currts;
+        }
+        if(rem_restarts > 0){
+            TripState ts = sampler(currts.drops, currts.wcap);
+            return hcrr_sub(ts, global_state, rem_restarts-1, 0, max_depth);
+        }
         return currts;
     }
 
-    return hcrr_sub(best, depth + 1, max_depth);
+    if (global_state.eval_state() <= best.eval_state())
+    {
+        global_state = currts;
+    }
+
+    return hcrr_sub(best, global_state, rem_restarts, depth+1, max_depth);
 }
 
 void assignPackages2(Trip &t, double wcap) {
@@ -177,7 +201,7 @@ void assignPackages2(Trip &t, double wcap) {
         d.perishable_food = 0;
     }
     TripState ts = sampler(t.drops, wcap);
-    TripState best = hcrr_sub(ts);
+    TripState best = hcrr_sub(ts, ts, 5, 0, 2000);
     t.drops = best.drops;
 
     t.dry_food_pickup = 0;
@@ -406,10 +430,10 @@ public:
      * @return the objective function of my state
      */
     double eval_state() {
-        double sv = state_value();
-        double sc = state_cost(); 
-        cout << "State Value : " << sv << endl;
-        cout << "State Cost : " << sc << endl;
+        //double sv = state_value();
+        //double sc = state_cost(); 
+        //cout << "State Value : " << sv << endl;
+        //cout << "State Cost : " << sc << endl;
         return state_value() - state_cost();
     }
     
@@ -449,10 +473,10 @@ public:
                 for (Trip sug_trip: meta_trips) {
                     HCState hcs_temp(hplans);
                     assignPackages2(sug_trip, hplans[h_idx].heli.weight_capacity);
-                    cout << "Hid " << hplans[h_idx].helicopter_id << endl;
-                    for (Drop d_test: sug_trip.drops) {
-                        cout << d_test.dry_food << " " << d_test.perishable_food << " " << d_test.other_supplies << endl;
-                    }
+                    //cout << "Hid " << hplans[h_idx].helicopter_id << endl;
+                    // for (Drop d_test: sug_trip.drops) {
+                    //     cout << d_test.dry_food << " " << d_test.perishable_food << " " << d_test.other_supplies << endl;
+                    // }
                     hcs_temp.hplans[h_idx].heli.trips[t_idx] = sug_trip;
                     succ.push_back(hcs_temp);
                 }
@@ -559,6 +583,7 @@ class HCSpace {
 public:
     vector<HCState> b_states;
     ProblemData data;
+    HCState global;
     
     /**
      * @brief convinience wrapper to populating the parameters of the state
@@ -656,13 +681,12 @@ public:
 
             double d_tot = 0;
             for (Village v_pros: v_in_range) {
-                d_tot += distance(v_pros.coords, heli.home_city_coords);
+                d_tot += 2*distance(v_pros.coords, heli.home_city_coords);
                 // cout << d_tot << " " << heli.d_max << endl;
                 if (d_tot <= heli.d_max) {
                     Trip t = prepare_trip(v_pros);
-                    
-                    hplan.heli.trips = {t};
-                    break;
+                    assignPackages2(t, hplan.heli.weight_capacity);
+                    hplan.heli.trips.push_back(t);
                 }
             }
 
@@ -714,7 +738,7 @@ public:
     hrc last_restart_ts;
     double eps_restart;
     Timer(int end_time, int eps_restart) {
-        cout << "[warn] Terminiation in 20s" << endl;
+        //cout << "[warn] Terminiation in 20s" << endl;
         this->end_time = end_time;
         this->eps_restart = eps_restart;
     }
@@ -726,7 +750,7 @@ public:
         
         hrc ts = now();
         auto duration = duration_cast<seconds>(ts-start_ts);
-        if (duration.count() + 2>= end_time) {
+        if (duration.count() + 10>= end_time) {
             return true;
         }
         return false; 
@@ -884,10 +908,10 @@ Solution solve(const ProblemData& problem) {
     hcrr(timer, cstate, hcspace);
 
     HCState best_sol = hcspace.estimated_global_extrema();
-    cout << "score: " << best_sol.eval_state() << endl;
+    //cout << "score: " << best_sol.eval_state() << endl;
     solution = best_sol.hplans;
     // --- END OF PLACEHOLDER LOGIC ---
 
-    cout << "Solver finished." << endl;
+    //cout << "Solver finished." << endl;
     return solution;
 }
