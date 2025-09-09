@@ -53,6 +53,7 @@ struct Village {
     int id;
     Point coords;
     int population;
+    
 
 };
 struct Drop {
