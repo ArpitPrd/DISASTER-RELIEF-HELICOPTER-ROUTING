@@ -38,6 +38,6 @@ $(CHECKER_EXEC): $(CHECKER_OBJS) io_handler.o
 
 # Clean up build files
 clean:
-	del -f $(EXEC) $(CHECKER_EXEC) $(OBJS) $(CHECKER_OBJS)
+	rm -f $(EXEC) $(CHECKER_EXEC) $(OBJS) $(CHECKER_OBJS)
 
 .PHONY: all clean checker
